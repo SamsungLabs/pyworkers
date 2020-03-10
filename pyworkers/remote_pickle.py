@@ -40,7 +40,7 @@ class SupportRemoteGetStateMeta(type):
                 break
             if d.get('__getstate__'):
                 import inspect
-                argsspec = inspect.getargspec(d.get('__getstate__'))
+                argsspec = inspect.getfullargspec(d.get('__getstate__'))
                 args = argsspec.args
                 if len(args) > 1:
                     if 'remote' in args:

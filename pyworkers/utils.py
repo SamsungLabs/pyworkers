@@ -3,7 +3,7 @@ import time
 import ctypes
 import logging
 import platform
-from inspect import getargspec
+from inspect import getfullargspec
 
 
 class BraceMessage(object):
@@ -31,7 +31,7 @@ class BraceStyleAdapter(logging.LoggerAdapter):
 
     def process(self, msg, kwargs):
         return msg, {key: kwargs[key] 
-                for key in getargspec(self.logger._log).args[1:] if key in kwargs}
+                for key in getfullargspec(self.logger._log).args[1:] if key in kwargs}
 
 
 class classproperty(property):
