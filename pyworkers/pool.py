@@ -3,6 +3,21 @@ import multiprocessing as mp
 from .persistent import PersistentWorker, WorkerType
 
 
+class PipeToQueue():
+    def __init__(self, pipe):
+        self._pipe = pipe
+
+    @property
+    def pipe(self):
+        return pipe
+
+    def put(self, obj):
+        return self._pipe.send(obj)
+
+    def get(self):
+        return self._pipe.recv()
+
+
 class Pool():
     def __init__(self, target, results_queue=None, args=None, kwargs=None, close_timeout=5, force_terminate=None, name=None):
         if close_timeout is not None and close_timeout < 0:
@@ -13,6 +28,7 @@ class Pool():
         self._timeout = close_timeout
         self._force_close = None
         self._workers = {}
+        self._queues = {}
         self._results = results_queue or mp.Queue()
         self._cleaned_up = True
         self._name = name or type(self).__name__
@@ -56,12 +72,14 @@ class Pool():
             userid = len(self._workers)
 
         try:
+            queue = mp.connection.Pipe()
             worker_kwargs = {
                 'target': self._target,
                 'args': self._args,
                 'kwargs': self._kwargs,
                 'name': name,
-                'userid': userid
+                'userid': userid,
+                'results_queue': PipeToQueue(queue[0])
             }
 
             worker = PersistentWorker.create(worker_type, **worker_kwargs)
@@ -69,6 +87,9 @@ class Pool():
                 raise ValueError(f'Duplicated worker id: {worker.id}')
 
             self._workers[worker.id] = worker
+            self._queues[worker.id] = queue[1]
+            if worker.is_process:
+                queue[0].close()
             worker = None
             self._cleaned_up = False
             self.handle_new_worker(worker)
@@ -92,7 +113,7 @@ class Pool():
 
         timeout = timeout if timeout is not None else self.timeout
         force = force if force is not None else self.force
-        for worker in self.workers.values():
+        for worker in self._workers.values():
             worker.close()
             if not worker.wait(timeout=timeout) and force:
                 worker.terminate(force=True)
@@ -100,32 +121,34 @@ class Pool():
         self._workers.clear()
         self._cleaned_up = True
 
-    def terminate(self):
+    def terminate(self, timeout=None):
         if self._cleaned_up:
             return
 
         timeout = timeout if timeout is not None else self.timeout
-        force = force if force is not None else self.force
-        for worker in self.workers.values():
-            worker.terminate(force=True)
+        for worker in self._workers.values():
+            worker.terminate(timeout=timeout, force=True)
 
         self._workers.clear()
         self._cleaned_up = True
 
 
-    def map(self, results_callback, *seq_generators, worker_extra_pending_inputs=0):
+    def run(self, *seq_generators, results_callback=None, worker_extra_pending_inputs=0):
         if self._map_guard:
             raise RuntimeError('recursive map!')
 
         self._map_guard = True
         self._deplated = False
+        self._pending = 0
         self._closed = set()
+        self._counters = {}
+        ret = []
 
         def next_inputs():
             if self._deplated:
                 return None
             try:
-                return tuple(map(next, seq_generators))
+                return tuple([next(gen) for gen in seq_generators])
             except StopIteration:
                 self._deplated = True
                 return None
@@ -134,25 +157,58 @@ class Pool():
             inp = next_inputs()
             if not self._deplated:
                 worker.enqueue(*inp)
+                self._pending += 1
             elif close_if_deplated:
                 worker.close()
                 self._closed.add(worker.id)
 
         
         for i in range(worker_extra_pending_inputs + 1):
-            for worker in self._workers.values()
+            for worker in self._workers.values():
                 if worker.id not in self._closed:
                     enqueue(worker, close_if_deplated=not i)
 
-        while True:
-            msg = self._results.get()
-            if msg is None:
-                break
+        while self._pending and set(self._workers.keys()).difference(self._closed):
+            ready = mp.connection.wait(list(self._queues.values()))
+            for conn in ready:
+                try:
+                    msg = conn.recv()
+                except EOFError:
+                    found = False
+                    for wid, queue in self._queues.items():
+                        if queue is conn:
+                            found = True
+                            break
+                    assert found
+                    msg = (None, False, None, wid)
+                        
+                if msg is None:
+                    break
 
-            worker, result = msg
-            results_callback(worker, result)
-            if worker.id not in self._closed:
-                enqueue(worker, close_if_deplated=True)
+                counter, flag, result, wid = msg
+                assert wid in self._workers
+                worker = self._workers.get(wid, None)
+                if not flag:
+                    if not wid in self._closed:
+                        # wid died
+                        self._pending -= 1
+                        self._closed.add(worker.id)
+                    else:
+                        # wid gracefully closed
+                        pass
+
+                    self._queues[worker.id].close()
+                    del self._queues[worker.id]
+                else:
+                    assert wid not in self._closed
+                    self._pending -= 1
+                    if results_callback is not None:
+                        result = results_callback(worker, result)
+                    ret.append(result)
+                    if worker.id not in self._closed:
+                        enqueue(worker, close_if_deplated=True)
+
+        return ret
 
 
     def handle_new_worker(self, worker):
