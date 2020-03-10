@@ -249,7 +249,10 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 #self._ctrl_comms.join_thread()
             if not alive and _release_remote_ctrl and self._ctrl_thread_rem.is_alive():
                 foreign_raise(self._ctrl_thread_rem.ident, GracefulExitError)
-                self._ctrl_sock.shutdown(socket.SHUT_RD)
+                try:
+                    self._ctrl_sock.shutdown(socket.SHUT_RD)
+                except OSError:
+                    pass
                 self._ctrl_thread_rem.join(timeout)
 
             return not alive
