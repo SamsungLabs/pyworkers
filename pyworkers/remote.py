@@ -562,6 +562,14 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._startup_sync.set()
         try:
             while True:
+                ready = mp.connection.wait([self._ctrl_sock, self._child.sentinel])
+                if self._child.sentinel in ready:
+                    try:
+                        self._socket.shutdown(socket.SHUT_WR)
+                        self._socket.close()
+                    except OSError:
+                        pass
+                    raise GracefulExitError()
                 msg = recv_msg(self._ctrl_sock, comment='ctrl: generic')
                 if msg is None:
                     raise GracefulExitError()

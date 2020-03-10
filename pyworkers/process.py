@@ -100,16 +100,16 @@ class ProcessWorker(Worker):
         if not hasattr(self, '_result'):
             #assert not self._comms[0].empty()
             self._comms[1].close()
+            has_result = False
             while True:
                 try:
                     self._result = self._comms[0].recv()
+                    has_result = True
                 except EOFError:
                     break
 
-            #self._result = self._comms[0].recv()
-            #if not self._comms[0].empty():
-            #    while not self._comms[0].empty():
-            #        self._result = self._comms.recv()
+            if not has_result:
+                self._result = (False, None)
 
         return self._result
 

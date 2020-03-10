@@ -1,3 +1,6 @@
+import unittest
+import os
+import signal
 import random
 
 from .test_utils import make_test, GenericTest
@@ -64,8 +67,25 @@ class TerminateServerTest(GenericTest):
         self.assertIsNone(self.worker.error)
         self.assertIsNone(self.worker.result)
 
+    def test_surprise_terminate(self):
+        self.worker = self.create_worker(malicious_loop)
+        self.assertTrue(self.worker.is_alive())
+        os.kill(self.server.pid, signal.SIGTERM)
+
+        self.assertTrue(self.server.wait(1))
+        self.assertTrue(self.worker.wait(1))
+
+        self.assertFalse(self.worker.is_alive())
+        self.assertTrue(self.worker.has_error)
+        self.assertIsNone(self.worker.error)
+        self.assertIsNone(self.worker.result)
+
 
 for cls in [RemoteWorker]:
     testtype = make_test(TerminateServerTest, cls)
     globals()[testtype.__name__] = testtype
     del testtype
+
+
+if __name__ == '__main__':
+    unittest.main()

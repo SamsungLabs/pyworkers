@@ -1,5 +1,8 @@
-import random
+import unittest
+import os
 import queue
+import signal
+import random
 
 from .test_utils import make_test, GenericTest
 
@@ -108,8 +111,41 @@ class PersistentTerminateServerTest(GenericTest):
 
         self.assertEqual(counter, 0)
 
+    def test_surprise_terminate(self):
+        xs = [random.random() for _ in range(10)]
+        self.worker = self.create_worker(malicious_test_fun)
+        self.assertTrue(self.worker.is_alive())
+        for x in xs:
+            self.worker.enqueue(x)
+
+        os.kill(self.server.pid, signal.SIGTERM)
+
+        self.assertTrue(self.server.wait(1))
+        self.assertTrue(self.worker.wait(1))
+
+        self.assertFalse(self.worker.is_alive())
+        self.assertTrue(self.worker.has_error)
+        self.assertIsNone(self.worker.error)
+        self.assertIsNone(self.worker.result)
+
+        counter = 0
+        for i, x in enumerate(xs):
+            with self.subTest(i=i):
+                try:
+                    y = self.worker.next_result()
+                    self.assertEqual(x**2, y)
+                    counter += 1
+                except queue.Empty:
+                    break
+
+        self.assertEqual(counter, 0)
+
 
 for cls in [PersistentRemoteWorker]:
     testtype = make_test(PersistentTerminateServerTest, cls)
     globals()[testtype.__name__] = testtype
     del testtype
+
+
+if __name__ == '__main__':
+    unittest.main()
