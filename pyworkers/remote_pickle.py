@@ -24,6 +24,7 @@ from .utils import python_is_exactly
 
 import io
 import copyreg
+import inspect
 
 
 class SupportRemoteGetStateMeta(type):
@@ -39,22 +40,17 @@ class SupportRemoteGetStateMeta(type):
                 has_remote = False
                 break
             if d.get('__getstate__'):
-                import inspect
-                argsspec = inspect.getfullargspec(d.get('__getstate__'))
-                args = argsspec.args
-                if len(args) > 1:
-                    if 'remote' in args:
-                        if not allow_remote:
-                            msg = 'A base class {!r} of class {!r}'.format(first_not_remote.__name__, cls.__name__) if first_not_remote is not cls else 'A class {!r}'.format(cls.__name__)
-                            msg += ' does not support "remote" argument to __getstate__ but one of its base classes ({!r}) does. This inconsistency can be potentially a source of problems.'.format(base.__name__)
-                            raise Warning(msg)
-                        has_remote = True
-                    elif argsspec.keywords:
-                        continue
-                    else:
-                        allow_remote = False
-                        first_not_remote = base
-                elif argsspec.keywords:
+                signature = inspect.signature(d.get('__getstate__'))
+                param_names = [param.name for param in signature.parameters.values()]
+                param_kinds = [param.kind for param in signature.parameters.values()]
+    
+                if 'remote' in param_names:
+                    if not allow_remote:
+                        msg = 'A base class {!r} of class {!r}'.format(first_not_remote.__name__, cls.__name__) if first_not_remote is not cls else 'A class {!r}'.format(cls.__name__)
+                        msg += ' does not support "remote" argument to __getstate__ but one of its base classes ({!r}) does. This inconsistency can be potentially a source of problems.'.format(base.__name__)
+                        raise Warning(msg)
+                    has_remote = True
+                elif inspect.Parameter.VAR_KEYWORD in param_kinds:
                     continue
                 else:
                     allow_remote = False

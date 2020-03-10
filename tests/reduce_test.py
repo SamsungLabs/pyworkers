@@ -1,7 +1,4 @@
 import unittest
-import io
-import pickle
-import copyreg
 
 import pickle
 import pyworkers.remote_pickle as remote_pickle
@@ -91,13 +88,13 @@ class RemotePickleTest(unittest.TestCase):
         orig = (Foo(), Bar(), Dip(), Pap(), Tup(), Wep())
         data = remote_pickle.dumps(orig)
         new = remote_pickle.loads(data)
-        self.assertEqual((obj.val for obj in new)), (1, 1, 2, 10, 4, 400))
+        self.assertEqual(tuple(obj.val for obj in new), (1, 1, 2, 10, 4, 400))
 
     def test_simple_standard(self):
         orig = (Foo(), Bar(), Dip(), Pap(), Tup(), Wep())
         data = pickle.dumps(orig)
         new = pickle.loads(data)
-        self.assertEqual((obj.val for obj in new), (0, 0, 2, 0, 4, 400))
+        self.assertEqual(tuple(obj.val for obj in new), (0, 0, 2, 0, 4, 400))
 
     def test_patched_state_remote_not_patched(self):
         orig = WithPatchedState()
