@@ -514,6 +514,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             logger.info('Sending result')
             send_msg(self._socket, result, 'data: result')
             logger.debug('Closing down backend-side socket')
+            self._socket.shutdown(socket.SHUT_WR)
             self._socket.close()
             if is_windows():
                 self._aux_socket_my.close()
