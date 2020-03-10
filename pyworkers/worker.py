@@ -82,7 +82,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         import importlib
         mod = importlib.import_module('.' + modname, package=__name__.rsplit('.', maxsplit=1)[0])
         target_cls = getattr(mod, clsname)
-        return target_cls(*args, **kwagrs)
+        return target_cls(*args, **kwargs)
 
     @staticmethod
     def get_current_id():
@@ -153,7 +153,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     @classproperty
     @classmethod
     def is_thread(cls, inst=None):
-        ''' `True` if the worker is a thread worker.
+        ''' *(classproperty)* `True` if the worker is a thread worker.
         '''
         if cls.worker_type != WorkerType.THREAD:
             if inst is not None:
@@ -164,7 +164,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     @classproperty
     @classmethod
     def is_process(cls, inst=None):
-        ''' `True` if the worker is a process worker.
+        ''' *(classproperty)* `True` if the worker is a process worker.
         '''
         if cls.worker_type != WorkerType.PROCESS:
             if inst is not None:
@@ -175,7 +175,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     @classproperty
     @classmethod
     def is_remote(cls, inst=None):
-        ''' `True` if the worker is a remote worker.
+        ''' *(classproperty)* `True` if the worker is a remote worker.
         '''
         if cls.worker_type != WorkerType.REMOTE:
             if inst is not None:
@@ -186,7 +186,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     @classproperty
     @classmethod
     def is_persistent(cls, inst=None):
-        ''' Return True if the worker is persistent (see PersistentWorker).
+        ''' *(classproperty)* Return True if the worker is persistent (see PersistentWorker).
             Otherwise return False.
         '''
         return False
@@ -256,7 +256,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     @classproperty
     @classmethod
     def worker_type(cls, inst=None):
-        ''' Return the worker's type (see WorkerType enum).
+        ''' *(classproperty)* Return the worker's type (see WorkerType enum).
             This only differentiate between thread, process and remote workers and
             does not provide any information about their subclasses.
             To check if the worker is persistent, please use `is_persistent`.
