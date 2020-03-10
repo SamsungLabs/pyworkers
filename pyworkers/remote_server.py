@@ -38,6 +38,8 @@ def run_server(addr, port, socket=None):
                 os.kill(child.pid, signal.SIGTERM)
 
         children.clear()
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        os.kill(os.getpid(), signal.SIGTERM)
 
     signal.signal(signal.SIGTERM, cleanup)
     #signal.signal(signal.SIGKILL, cleanup)
