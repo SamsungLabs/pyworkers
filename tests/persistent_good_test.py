@@ -84,3 +84,8 @@ for cls in [PersistentThreadWorker, PersistentProcessWorker, PersistentRemoteWor
     testtype = make_test(PersistentGoodTest, cls)
     globals()[testtype.__name__] = testtype
     del testtype
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

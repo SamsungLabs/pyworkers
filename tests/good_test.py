@@ -1,3 +1,4 @@
+import unittest
 import random
 
 from .test_utils import make_test, GenericTest
@@ -62,3 +63,7 @@ for cls in [ThreadWorker, ProcessWorker, RemoteWorker]:
     testtype = make_test(GoodTest, cls)
     globals()[testtype.__name__] = testtype
     del testtype
+
+
+if __name__ == '__main__':
+    unittest.main()
