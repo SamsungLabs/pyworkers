@@ -32,12 +32,17 @@ class PersistentWorker(Worker):
 
     def next_result(self, block=True, timeout=None):
         if not self.is_alive():
-            return self.results_queue.get_nowait()
+            ret = self.results_queue.get_nowait()
+        else:
+            try:
+                ret = self.results_queue.get(block=block, timeout=timeout)
+            except BrokenPipeError:
+                raise queue.Empty
 
-        try:
-            return self.results_queue.get(block=block, timeout=timeout)
-        except BrokenPipeError:
+        counter, flag, value, wid = ret
+        if not flag:
             raise queue.Empty
+        return value
 
     def results_iter(self, maxitems=None):
         cnt = 0

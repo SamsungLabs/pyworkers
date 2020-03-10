@@ -50,17 +50,6 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
             return
         self._args_queue.put((args, kwargs))
 
-    def next_result(self, block=True, timeout=None):
-        if not self.is_alive():
-            ret = self.results_queue.get_nowait()
-        else:
-            ret = self.results_queue.get(block=block, timeout=timeout)
-
-        flag, result = ret
-        if not flag:
-            raise queue.Empty()
-        return result
-
     #
     # Running mechanism
     #
@@ -81,9 +70,12 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
                 kwargs.update(ekwargs)
                 result = self.run(*args, **kwargs)
                 counter += 1
-                self._results_queue.put((True, result))
+                self._results_queue.put((counter, True, result, self.id))
         finally:
-            self._results_queue.put((False, None))
+            self._results_queue.put((counter, False, None, self.id))
+            #if hasattr(self._results_queue, 'close'):
+            #    self._results_queue.close()
+            #    self._results_queue.join_thread()
 
         return counter
 

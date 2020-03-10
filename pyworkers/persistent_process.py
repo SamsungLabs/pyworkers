@@ -73,8 +73,9 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
                 kwargs.update(ekwargs)
                 result = self.run(*args, **kwargs)
                 counter += 1
-                self._results_queue.put(result)
+                self._results_queue.put((counter, True, result, self.id))
         finally:
+            self._results_queue.put((counter, False, None, self.id))
             self._results_queue.close()
             #self._results_queue.join_thread()
             self._args_queue[1].close()
