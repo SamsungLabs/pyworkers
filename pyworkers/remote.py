@@ -71,6 +71,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 if not isinstance(host, tuple) or len(host) != 2:
                     raise TypeError('Invalid type for "host" parameter: {}'.format(type(host).__name__))
                 self._target_host = host
+        else:
+            self._target_host = ('127.0.0.1', 6006)
 
         self._startup_sync = threading.Event()
         self._remote_side = False # tells us whether the class exists on the remote end
