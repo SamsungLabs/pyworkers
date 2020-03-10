@@ -26,7 +26,7 @@ def send_msg(sock, msg, comment=None):
     logger.debug('Sending a message: {} ({})', len(data), comment)
     try:
         sock.sendall(data_len + data)
-    except (BrokenPipeError, ConnectionResetError) as e:
+    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError) as e:
         logger.debug('Sending failed: {}', e)
         raise ConnectionClosedError() from e
 
@@ -34,7 +34,7 @@ def send_msg(sock, msg, comment=None):
 def recv_msg(sock, state_overwrites=None, comment=None):
     try:
         data_len = struct.unpack('!I', sock.recv(4))[0]
-    except (BrokenPipeError, struct.error, ConnectionResetError, ConnectionAbortedError) as e:
+    except (BrokenPipeError, struct.error, ConnectionResetError, ConnectionAbortedError, OSError) as e:
         raise ConnectionClosedError() from e
 
     logger.debug('Receiving a message: {} ({})', data_len, comment)
