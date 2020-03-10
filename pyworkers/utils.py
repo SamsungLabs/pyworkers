@@ -43,6 +43,8 @@ class classproperty(property):
         if fdel is not None and not isinstance(fdel, classmethod):
             raise ValueError('fdel should be a classmethod')
         super().__init__(fget, fset, fdel, doc)
+        if doc is None and fget is not None:
+            self.__doc__ = fget.__func__.__doc__
 
     def __get__(self, inst, cls=None):
         if self.fget is None:
