@@ -74,7 +74,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
         while True:
             try:
                 result = recv_msg(self._socket, comment='data: result')
-            except ConnectionClosedError as e:
+            except ConnectionClosedError:
                 logger.info('Connection closed by the remote peer')
                 self._socket_closed = True
                 self._result = (False, None)
@@ -167,9 +167,9 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                 if extra is None:
                     logger.debug('Backend released gracefully via a None message')
                     break
-                eargs, ekwargs = extra
-                args[0:len(eargs)] = eargs
-                kwargs.update(ekwargs)
+                extra_args, extra_kwargs = extra
+                args[0:len(extra_args)] = extra_args
+                kwargs.update(extra_kwargs)
                 result = self.run(*args, **kwargs)
                 counter += 1
                 send_msg(self._socket, (counter, True, result, self.id), comment=f'data: partial result {counter}')

@@ -362,7 +362,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         try:
             self._result = recv_msg(self._socket, comment='data: result')
             logger.info('Result received')
-        except ConnectionClosedError as e:
+        except ConnectionClosedError:
             self._result = (False, None)
             logger.info('Connection to the child has been closed before receiving the result')
         logger.debug('Result: {}', self._result)

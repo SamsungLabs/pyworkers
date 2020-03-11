@@ -65,9 +65,9 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
                 extra = self._args_queue.get()
                 if extra is None:
                     break
-                eargs, ekwargs = extra
-                args[0:len(eargs)] = eargs
-                kwargs.update(ekwargs)
+                extra_args, extra_kwargs = extra
+                args[0:len(extra_args)] = extra_args
+                kwargs.update(extra_kwargs)
                 result = self.run(*args, **kwargs)
                 counter += 1
                 self._results_queue.put((counter, True, result, self.id))

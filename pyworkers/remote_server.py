@@ -61,7 +61,7 @@ def run_server(addr, port, socket=None):
             children.append(child)
     except (WorkerTerminatedError, KeyboardInterrupt):
         pass
-    except Exception as e:
+    except Exception:
         logger.exception('Error occurred in the remote server:')
         raise
     finally:

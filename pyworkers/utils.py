@@ -50,7 +50,7 @@ class classproperty(property):
         if self.fget is None:
             raise AttributeError("unreadable attribute")
 
-        return self.fget.__get__(inst, cls)(inst=inst)
+        return self.fget.__get__(inst, cls)(inst=inst) # pylint: disable=no-member
 
     def __set__(self, inst, val):
         if self.fset is None:
@@ -60,7 +60,7 @@ class classproperty(property):
             inst = None
         else:
             cls = type(inst)
-        return self.fset.__get__(inst, cls)(val, inst=inst)
+        return self.fset.__get__(inst, cls)(val, inst=inst) # pylint: disable=no-member
 
     def __delete__(self, inst):
         if self.fdel is None:
@@ -70,7 +70,7 @@ class classproperty(property):
             inst = None
         else:
             cls = type(inst)
-        return self.fdel.__get__(inst, cls)(inst=inst)
+        return self.fdel.__get__(inst, cls)(inst=inst) # pylint: disable=no-member
 
 
 class SupportClassPropertiesMeta(type):

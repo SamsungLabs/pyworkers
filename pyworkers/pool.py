@@ -9,7 +9,7 @@ class PipeToQueue():
 
     @property
     def pipe(self):
-        return pipe
+        return self._pipe
 
     def put(self, obj):
         return self._pipe.send(obj)
@@ -185,7 +185,7 @@ class Pool():
                 if msg is None:
                     break
 
-                counter, flag, result, wid = msg
+                unused_counter, flag, result, wid = msg
                 assert wid in self._workers
                 worker = self._workers.get(wid, None)
                 if not flag:

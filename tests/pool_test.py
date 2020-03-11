@@ -120,7 +120,7 @@ class PoolTest(GenericTest):
                 # does not have opportunity to react to termination request
                 os.kill(w.pid, signal.SIGTERM)
 
-            results = p.run(iter(i for i in range(10)))
+            unused_results = p.run(iter(i for i in range(10)))
 
         for w in p.workers:
             self.assertFalse(w.is_alive())

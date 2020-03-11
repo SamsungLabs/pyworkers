@@ -39,7 +39,7 @@ class PersistentWorker(Worker):
             except BrokenPipeError:
                 raise queue.Empty
 
-        counter, flag, value, wid = ret
+        unused_counter, flag, value, unused_wid = ret
         if not flag:
             raise queue.Empty
         return value

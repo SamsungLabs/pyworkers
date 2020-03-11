@@ -8,7 +8,7 @@ from .state import RemoteState
 class RemotePickler36(pickle.Pickler):
     @staticmethod
     def subject_to_custom_reduce(obj):
-        from ..remote_pickle import SupportRemoteGetState
+        from ..remote_pickle import SupportRemoteGetState # pylint: disable(relative-beyond-top-level)
         return type(obj) in SupportRemoteGetState.supported_classes
 
     @staticmethod

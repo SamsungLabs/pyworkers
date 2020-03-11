@@ -133,7 +133,6 @@ class RemoteState(dict):
         def patched_setstate(obj, state):
             if isinstance(state, dict):
                 patched_state = state.copy()
-                patches = RemoteState.current_patches()
                 patched_state.update(RemoteState.current_patches())
             elif RemoteState.current_patches():
                 raise TypeError('State should be dict in order to be patched, not {!r}, while patching remote state of an object with type {!r} with patching context: {}'.format(type(state).__name__, type(ret).__name__, RemoteState._active_contexts.ctxs[-1]))
@@ -144,6 +143,6 @@ class RemoteState(dict):
             orig_getstate(obj, patched_state)
             RemoteState.child_restored(obj)
 
-        ret.__setstate__ = patched_setstate.__get__(ret, type(ret))
+        ret.__setstate__ = patched_setstate.__get__(ret, type(ret)) # pylint: disable=assignment-from-no-return,no-value-for-parameter
         RemoteState.break_patches(children_names)
         return ret

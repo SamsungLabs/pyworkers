@@ -73,15 +73,15 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         if not isinstance(worker_type, WorkerType):
             raise TypeError('Expected WorkerType value')
 
-        modname = worker_type.name.lower()
-        clsname = modname[0].upper() + modname[1:] + 'Worker'
+        mod_name = worker_type.name.lower()
+        cls_name = mod_name[0].upper() + mod_name[1:] + 'Worker'
         if cls.is_persistent:
-            modname = 'persistent_{}'.format(modname)
-            clsname = 'Persistent{}'.format(clsname)
+            mod_name = 'persistent_{}'.format(mod_name)
+            cls_name = 'Persistent{}'.format(cls_name)
 
         import importlib
-        mod = importlib.import_module('.' + modname, package=__name__.rsplit('.', maxsplit=1)[0])
-        target_cls = getattr(mod, clsname)
+        mod = importlib.import_module('.' + mod_name, package=__name__.rsplit('.', maxsplit=1)[0])
+        target_cls = getattr(mod, cls_name)
         return target_cls(*args, **kwargs)
 
     @staticmethod
@@ -92,7 +92,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
 
     @property
     def name(self):
-        ''' Name of the worker, as set via the contructor.
+        ''' Name of the worker, as set via the constructor.
         '''
         return self._name
 
@@ -334,7 +334,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             where runtime information (process id, etc.) about the child is passed
             to the parent. In other words, after _start finished, the state of the
             object in the parent should be consistent with the state of the object
-            in the child. Please note that "consistent" here does not necesserilly mean
+            in the child. Please note that "consistent" here does not necessarily mean
             "exactly the same" as some values might be expected to be different when
             accessed from different sides. However, if there is a relation which
             should hold between any of them, any guarantees are only given after `_start`

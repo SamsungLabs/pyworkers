@@ -17,7 +17,7 @@ class build_maybe_inplace(install):
         assert not _dist_file.exists()
         #if not _dist_file.exists():
         with open(_dist_file, 'w') as df:
-            df.write('\n'.join(map(lambda dname: dname+' = '+repr(getattr(pyworkers_version, dname)), pyworkers_version.__all__)) + '\n')
+            df.write('\n'.join(map(lambda attr_name: attr_name+' = '+repr(getattr(pyworkers_version, attr_name)), pyworkers_version.__all__)) + '\n')
 
         return super().run()
 
