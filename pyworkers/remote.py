@@ -9,6 +9,7 @@ import logging
 import traceback
 import threading
 import multiprocessing as mp
+import multiprocessing.connection
 
 from . import remote_pickle
 from .utils import get_hostname, foreign_raise, is_windows, BraceStyleAdapter, classproperty, SupportClassPropertiesMeta

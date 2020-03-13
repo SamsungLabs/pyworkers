@@ -11,7 +11,6 @@ from pyworkers.utils import active_sleep
 
 
 def test_loop():
-    print('Test loop!')
     while True:
         active_sleep(1, interval=0.1)
 
