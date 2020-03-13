@@ -268,7 +268,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     @property
     def is_child(self):
         ''' Return True if the worker object lives on the child-side (only guaranteed to be correct when
-            called from either the parent or the child, accessing from any auxillary thread/process might
+            called from either the parent or the child, accessing from any auxiliary thread/process might
             result in wrong values - if the object can live in more than the parent and the child and more
             fain-grained differentiation is needed, one should have its own ways of checking that).
         '''
@@ -295,17 +295,17 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             a `WorkerTerminatedError` exception in the child's thread (possibly crossing
             process and/or host boundaries along the way) to allow it to finish gracefully.
             The `timeout` argument controlls how much time (in seconds) the child is given to react to the
-            termination request, measrued from the moment an exception is raised.
+            termination request, measured from the moment an exception is raised.
             If the child is still alive after that and `force` is set to True, the function
             will then try to force-kill the child with the specific methodology
             being dependent on the worker type.
             No matter what are the arguments' values, the function always returns True if the child
             is dead at the end of the function, and False otherwise. The important part here is:
             'at the end of the function` which means that in some cases, the function might return
-            'False' signaling that the child was unsuccessfully terminted, but in fact the child
+            'False' signalling that the child was unsuccessfully terminated, but in fact the child
             is still cleaning up and will die shortly after. This can most likely happen if the function
             is called with `timeout=0, force=False` as the child process will not have enough time to react
-            to the termination request but might fullfil it at some point in the future.
+            to the termination request but might fulfil it at some point in the future.
         '''
         raise NotImplementedError()
 

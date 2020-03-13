@@ -35,7 +35,7 @@ class Pool():
 
         self._map_guard = False
         self._pending = 0
-        self._deplated = False
+        self._depleted = False
         self._closed = set()
 
     @property
@@ -138,27 +138,27 @@ class Pool():
             raise RuntimeError('recursive map!')
 
         self._map_guard = True
-        self._deplated = False
+        self._depleted = False
         self._pending = 0
         self._closed = set()
         self._counters = {}
         ret = []
 
         def next_inputs():
-            if self._deplated:
+            if self._depleted:
                 return None
             try:
                 return tuple([next(gen) for gen in seq_generators])
             except StopIteration:
-                self._deplated = True
+                self._depleted = True
                 return None
 
-        def enqueue(worker, close_if_deplated=False):
+        def enqueue(worker, close_if_depleted=False):
             inp = next_inputs()
-            if not self._deplated:
+            if not self._depleted:
                 worker.enqueue(*inp)
                 self._pending += 1
-            elif close_if_deplated:
+            elif close_if_depleted:
                 worker.close()
                 self._closed.add(worker.id)
 
@@ -166,7 +166,7 @@ class Pool():
         for i in range(worker_extra_pending_inputs + 1):
             for worker in self._workers.values():
                 if worker.id not in self._closed:
-                    enqueue(worker, close_if_deplated=not i)
+                    enqueue(worker, close_if_depleted=not i)
 
         while self._pending and set(self._workers.keys()).difference(self._closed):
             ready = mp.connection.wait(list(self._queues.values()))
@@ -206,7 +206,7 @@ class Pool():
                         result = results_callback(worker, result)
                     ret.append(result)
                     if worker.id not in self._closed:
-                        enqueue(worker, close_if_deplated=True)
+                        enqueue(worker, close_if_depleted=True)
 
         return ret
 

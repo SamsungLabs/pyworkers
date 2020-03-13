@@ -326,7 +326,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._dead = False
         logger.debug('Waiting for the frontend thread to notify that everything is up and running...')
         self._startup_sync.wait()
-        logger.info('Child created successfully, continueing with the main thread')
+        logger.info('Child created successfully, continuing with the main thread')
 
     # Parent-side, helper thread managing network communication and fetching results from the child
     def _run_frontend(self):
@@ -345,7 +345,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         incoming.close()
 
         self._host, self._pid, self._tid = recv_msg(self._ctrl_sock, comment='ctrl: runtime info')
-        logger.debug('Received info package from the backend, signaling the main thread that everything is fine')
+        logger.debug('Received info package from the backend, signalling the main thread that everything is fine')
         self._startup_sync.set()
         self._fetch_results()
         logger.debug('Closing down frontend-side socket')
@@ -428,7 +428,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._child.start()
             self._dead = False
 
-            # Cleanup things which are only needed in the backend
+            # Clean up things which are only needed in the backend
             self._payload = None
             #self._socket.detach()
             #self._socket.close()

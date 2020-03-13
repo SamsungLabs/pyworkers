@@ -70,7 +70,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
     # Parent side - fetch results in loop instead of just waiting for a one
     def _fetch_results(self):
         counter = 0
-        last_partial_result_signaled = False
+        last_partial_result_signalled = False
         while True:
             try:
                 result = recv_msg(self._socket, comment='data: result')
@@ -78,17 +78,17 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                 logger.info('Connection closed by the remote peer')
                 self._socket_closed = True
                 self._result = (False, None)
-                if not last_partial_result_signaled:
+                if not last_partial_result_signalled:
                     self._results_queue.put((counter, False, None, self.id))
-                    last_partial_result_signaled = True
+                    last_partial_result_signalled = True
                 break
 
             if len(result) > 2:
                 remote_counter, valid, value, wid = result
                 if not valid:
-                    logger.debug('New message signaling end of partial results')
+                    logger.debug('New message signalling end of partial results')
                     self._results_queue.put(result)
-                    last_partial_result_signaled = True
+                    last_partial_result_signalled = True
                     assert remote_counter == counter
                     assert value is None
                     assert wid == self.id
