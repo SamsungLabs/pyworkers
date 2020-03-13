@@ -26,7 +26,6 @@ def malicious_test_fun(x):
 
 class PersistentTerminateServerTest(GenericTest):
     def __init__(self, target_cls, *args, **kwargs):
-        print(target_cls)
         if not target_cls.is_remote:
             raise TypeError('Only remote types are expected got {}'.format(target_cls.__name__))
         super().__init__(target_cls, *args, **kwargs)

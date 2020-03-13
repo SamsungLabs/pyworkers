@@ -6,6 +6,7 @@ import queue
 import socket
 import logging
 import multiprocessing as mp
+import multiprocessing.connection
 
 from .utils import is_windows, BraceStyleAdapter
 

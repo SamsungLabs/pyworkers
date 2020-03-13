@@ -68,6 +68,9 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     def __del__(self):
         self.terminate()
 
+    def __repr__(self):
+        return f'{type(self).__name__}(name: {self.name!r}, userid: {self.userid}, id: {self.id}, target: {self._target})'
+
     @classmethod
     def create(cls, worker_type, *args, **kwargs):
         if not isinstance(worker_type, WorkerType):
