@@ -1,5 +1,6 @@
 from .thread import ThreadWorker
 from .persistent import PersistentWorker
+from .utils import LocalPipe
 
 import copy
 import queue
@@ -7,10 +8,10 @@ import threading
 
 
 class PersistentThreadWorker(PersistentWorker, ThreadWorker):
-    def __init__(self, target, results_queue=None, **kwargs):
-        results_queue = results_queue or queue.Queue()
-        self._args_queue = queue.Queue()
-        super().__init__(target, results_queue, **kwargs)
+    def __init__(self, target, results_pipe=None, **kwargs):
+        results_pipe = results_pipe or LocalPipe()
+        self._args_pipe = LocalPipe()
+        super().__init__(target, results_pipe, **kwargs)
 
     #
     # Implement interface
@@ -48,7 +49,7 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
     def enqueue(self, *args, **kwargs):
         if not self.is_alive() or self._closed:
             return
-        self._args_queue.put((args, kwargs))
+        self._args_pipe.parent_end.put((args, kwargs))
 
     #
     # Running mechanism
@@ -62,7 +63,7 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
             while not self._stop:
                 args = copy.deepcopy(self._args)
                 kwargs = copy.deepcopy(self._kwargs)
-                extra = self._args_queue.get()
+                extra = self._args_pipe.child_end.get()
                 if extra is None:
                     break
                 extra_args, extra_kwargs = extra
@@ -70,9 +71,9 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
                 kwargs.update(extra_kwargs)
                 result = self.run(*args, **kwargs)
                 counter += 1
-                self._results_queue.put((counter, True, result, self.id))
+                self._results_pipe.child_end.put((counter, True, result, self.id))
         finally:
-            self._results_queue.put((counter, False, None, self.id))
+            self._results_pipe.child_end.put((counter, False, None, self.id))
             #if hasattr(self._results_queue, 'close'):
             #    self._results_queue.close()
             #    self._results_queue.join_thread()
@@ -83,5 +84,5 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
     def _release_child(self):
         if self._closed:
             return
-        self._args_queue.put(None)
+        self._args_pipe.parent_end.put(None)
         self._closed = True

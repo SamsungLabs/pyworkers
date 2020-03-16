@@ -61,5 +61,9 @@ class GenericTest():
         return super().assertIsInstance(*args, **kwargs) # pylint: disable=no-member
     def assertIsNotInstance(self, *args, **kwargs):
         return super().assertIsNotInstance(*args, **kwargs) # pylint: disable=no-member
+    def assertIn(self, *args, **kwargs):
+        return super().assertIn(*args, **kwargs) # pylint: disable=no-member
+    def assertNotIn(self, *args, **kwargs):
+        return super().assertNotIn(*args, **kwargs) # pylint: disable=no-member
     def subTest(self, *args, **kwargs):
         return super().subTest(*args, **kwargs) # pylint: disable=no-member

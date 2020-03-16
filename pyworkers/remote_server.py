@@ -87,7 +87,7 @@ class RemoteServer(ProcessWorker):
 
     def _start(self):
         super()._start()
-        self._addr, self._port = self._comms[0].recv()
+        self._addr, self._port = self._comms.parent_end.recv()
         if not isinstance(self._addr, str):
             self._result = self._addr, self._port
             self._addr, self._port = None, None
@@ -104,7 +104,7 @@ class RemoteServer(ProcessWorker):
     def run(self):
         self._server = open_socket(self.addr, self.port)
         info = self._server.getsockname()
-        self._comms[1].send(info)
+        self._comms.child_end.send(info)
         return run_server(self.addr, self.port, self._server)
 
     def _release_self(self):

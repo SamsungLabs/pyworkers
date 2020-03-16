@@ -67,10 +67,12 @@ class SupportRemoteGetState(metaclass=SupportRemoteGetStateMeta):
     pass
 
 
-if python_is_exactly(3, 6):
-    from ._remote_pickle.remote_pickler_3_6 import RemotePickler36 as RemotePickler
-else:
-    raise RuntimeError('Unsupported python version')
+#if python_is_exactly(3, 6):
+#    from ._remote_pickle.remote_pickler_3_6 import RemotePickler36 as RemotePickler
+#else:
+#    raise RuntimeError('Unsupported python version')
+
+from ._remote_pickle.remote_pickler_3_6 import RemotePickler36 as RemotePickler
 
 
 import pickle

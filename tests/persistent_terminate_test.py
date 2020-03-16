@@ -10,7 +10,7 @@ from pyworkers.worker import WorkerTerminatedError
 from pyworkers.persistent_thread import PersistentThreadWorker
 from pyworkers.persistent_process import PersistentProcessWorker
 from pyworkers.persistent_remote import PersistentRemoteWorker
-from pyworkers.utils import active_sleep
+from pyworkers.utils import active_sleep, is_windows
 
 
 def test_fun(x):
@@ -114,6 +114,14 @@ class PersistentTerminateTest(GenericTest):
         self.assertTrue(self.worker.is_alive())
         for x in xs:
             self.worker.enqueue(x)
+
+        if is_windows():
+            # On Windows 'terminate' below is called too fast, we need
+            # to give the child process some time in order for it to
+            # actually get into 'malicious_test_fun' - otherwise
+            # the first terminate is successful
+            import time
+            #time.sleep(0.1)
 
         self.assertFalse(self.worker.terminate(force=False))
         self.assertTrue(self.worker.terminate(force=True))

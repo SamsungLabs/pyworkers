@@ -65,8 +65,9 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             self._started = False
             self._result = (True, None)
 
-    def __del__(self):
-        self.terminate()
+    #def __del__(self):
+    #    if not self._is_child:
+    #        self.terminate()
 
     def __repr__(self):
         return f'{type(self).__name__}(name: {self.name!r}, userid: {self.userid}, id: {self.id}, target: {self._target})'

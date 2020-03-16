@@ -8,7 +8,7 @@ from .test_utils import make_test, GenericTest
 
 from pyworkers.worker import WorkerTerminatedError
 from pyworkers.persistent_remote import PersistentRemoteWorker
-from pyworkers.utils import active_sleep
+from pyworkers.utils import active_sleep, is_windows
 
 
 def test_fun(x):
@@ -112,6 +112,10 @@ class PersistentTerminateServerTest(GenericTest):
         self.assertEqual(counter, 0)
 
     def test_surprise_terminate(self):
+        if is_windows():
+            # On Windows we can't react to SIGTERM in the server process
+            # so the entire scenario won't work simply because of the OS...
+            return
         xs = [random.random() for _ in range(10)]
         self.worker = self.create_worker(malicious_test_fun)
         self.assertTrue(self.worker.is_alive())

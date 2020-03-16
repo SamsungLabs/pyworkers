@@ -1,21 +1,27 @@
 from .worker import Worker, WorkerType, WorkerTerminatedError
 
 import os
+import queue
 import signal
+import logging
 import platform
 import threading
 import multiprocessing as mp
 
-from .utils import foreign_raise, classproperty
+from .utils import foreign_raise, classproperty, Pipe, is_windows, BraceStyleAdapter
+
+logger = BraceStyleAdapter(logging.getLogger(__name__))
 
 
 class ProcessWorker(Worker):
     def __init__(self, *args, **kwargs):
-        self._comms = mp.Pipe()
-        self._ctrl_comms = mp.Pipe()
+        self._comms = Pipe()
+        self._ctrl_comms = Pipe()
         self._is_child = False
         super().__init__(*args, **kwargs)
         assert not self.is_child
+        self._comms.child_end.close()
+        self._ctrl_comms.child_end.close()
 
     #
     # Declare type
@@ -72,25 +78,28 @@ class ProcessWorker(Worker):
         if not self.is_alive():
             return True
         else:
-            self._ctrl_comms[0].send('terminate')
-            #_ = self._ctrl_comms[0].recv()
+            try:
+                self._ctrl_comms.parent_end.put('terminate')
+                self._ctrl_comms.parent_end.get()
+            except (BrokenPipeError, queue.Empty):
+                pass
+
             self._release_child()
             self._child.join(timeout)
             if self._child.is_alive():
                 if force:
                     self._child.terminate()
                     self._child.join(timeout)
-                    try:
-                        self._comms[1].send((False, None))
-                        self._comms[1].close()
-                    except (OSError, BrokenPipeError):
-                        pass
+                    # try:
+                    #     self._comms.child_end.put((False, None))
+                    #     self._comms.child_end.close()
+                    # except (OSError, BrokenPipeError):
+                    #     pass
 
             alive = self._child.is_alive()
             if not alive:
                 self._dead = True
-                self._ctrl_comms[0].close()
-                #self._ctrl_comms.join_thread()
+                self._ctrl_comms.parent_end.close()
             return not alive
 
     def _get_result(self):
@@ -99,13 +108,13 @@ class ProcessWorker(Worker):
             return None
         if not hasattr(self, '_result'):
             #assert not self._comms[0].empty()
-            self._comms[1].close()
+            #self._comms.child_end.close()
             has_result = False
             while True:
                 try:
-                    self._result = self._comms[0].recv()
+                    self._result = self._comms.parent_end.get()
                     has_result = True
-                except EOFError:
+                except queue.Empty:
                     break
 
             if not has_result:
@@ -122,7 +131,7 @@ class ProcessWorker(Worker):
         self._child = mp.Process(target=self._run, name=self.name)
         self._child.start()
         self._dead = False
-        self._pid, self._tid = self._comms[0].recv()
+        self._pid, self._tid = self._comms.parent_end.recv()
         assert self._pid == self._child.pid
 
     # Children-side, main (working) thread
@@ -135,37 +144,37 @@ class ProcessWorker(Worker):
 
         self._terminate_req = False
         self._ctrl_thread_sync = threading.Event()
-        self._ctrl_thread = threading.Thread(target=self._ctrl_fn, name=f'{self.name} control thread')
+        self._ctrl_thread = threading.Thread(target=self._ctrl_fn, name=f'{self.name} control thread', daemon=True)
         self._ctrl_thread.start()
         self._ctrl_thread_sync.wait()
 
+        self._comms.parent_end.close()
+        #self._ctrl_comms.parent_end.close()
+
         try:
-            self._comms[1].send((self._pid, self._tid))
-            assert self.is_child
+            #assert self.is_child
+            self._comms.child_end.put((self._pid, self._tid))
             result = self.do_work()
-            self._comms[1].send((True, result))
+            self._comms.child_end.put((True, result))
         except Exception as e:
-            self._comms[1].send((False, e))
+            logger.exception('Exception occurred while running the main function')
+            self._comms.child_end.put((False, e))
         finally:
             if self._ctrl_thread.is_alive() and not self._terminate_req:
-                self._ctrl_comms[0].send(None)
+                self._ctrl_comms.parent_end.send(None)
                 self._ctrl_thread.join()
-            self._comms[1].close()
-            #self._comms.join_thread()
+            self._comms.child_end.close()
 
     # Children-side, control thread
     def _ctrl_fn(self):
         assert self._is_child
         self._ctrl_thread_sync.set()
-        sig = self._ctrl_comms[1].recv()
+        sig = self._ctrl_comms.child_end.recv()
         if sig is None:
-            self._ctrl_comms[1].close()
-            #self._ctrl_comms.join_thread()
+            self._ctrl_comms.child_end.close()
             return
 
         self._terminate_req = True
         foreign_raise(self._tid, WorkerTerminatedError)
         self._release_self()
-        #self._ctrl_comms[1].send(True)
-        self._ctrl_comms[1].close()
-        #self._ctrl_comms.join_thread()
+        self._ctrl_comms.child_end.close()

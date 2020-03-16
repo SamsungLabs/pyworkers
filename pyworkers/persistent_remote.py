@@ -8,15 +8,15 @@ import logging
 import multiprocessing as mp
 import multiprocessing.connection
 
-from .utils import is_windows, BraceStyleAdapter
+from .utils import is_windows, BraceStyleAdapter, LocalPipe
 
 logger = BraceStyleAdapter(logging.getLogger(__name__))
 
 
 class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
-    def __init__(self, target, results_queue=None, **kwargs):
-        results_queue = results_queue or queue.Queue()
-        super().__init__(target, results_queue, **kwargs)
+    def __init__(self, target, results_pipe=None, **kwargs):
+        results_pipe = results_pipe or LocalPipe()
+        super().__init__(target, results_pipe, **kwargs)
         self._socket_closed = False
 
     #
@@ -80,7 +80,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                 self._socket_closed = True
                 self._result = (False, None)
                 if not last_partial_result_signalled:
-                    self._results_queue.put((counter, False, None, self.id))
+                    self._results_pipe.child_end.put((counter, False, None, self.id))
                     last_partial_result_signalled = True
                 break
 
@@ -88,7 +88,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                 remote_counter, valid, value, wid = result
                 if not valid:
                     logger.debug('New message signalling end of partial results')
-                    self._results_queue.put(result)
+                    self._results_pipe.child_end.put(result)
                     last_partial_result_signalled = True
                     assert remote_counter == counter
                     assert value is None
@@ -96,7 +96,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                 else:
                     logger.debug(f'New intermediate result received: {counter}/{remote_counter}')
                     counter += 1
-                    self._results_queue.put(result)
+                    self._results_pipe.child_end.put(result)
                     assert counter == remote_counter
                     assert wid == self.id
             else:
@@ -111,7 +111,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
         if not remote:
             return state
 
-        state['_results_queue'] = None
+        state['_results_pipe'] = None
         return state
 
     # Child process, run the main loop
@@ -189,10 +189,11 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
             self._stop = True
             return
         elif self.is_remote_side:
-            try:
-                self._socket.shutdown(socket.SHUT_RD)
-            except OSError:
-                pass
+            if not is_windows():
+                try:
+                    self._socket.shutdown(socket.SHUT_RD)
+                except OSError:
+                    pass
         else:
             if self._closed or self._socket_closed:
                 return

@@ -7,7 +7,7 @@ from .test_utils import make_test, GenericTest
 
 from pyworkers.worker import WorkerTerminatedError
 from pyworkers.remote import RemoteWorker
-from pyworkers.utils import active_sleep
+from pyworkers.utils import active_sleep, is_windows
 
 
 def test_loop():
@@ -67,6 +67,10 @@ class TerminateServerTest(GenericTest):
         self.assertIsNone(self.worker.result)
 
     def test_surprise_terminate(self):
+        if is_windows():
+            # On Windows we can't react to SIGTERM in the server process
+            # so the entire scenario won't work simply because of the OS...
+            return
         self.worker = self.create_worker(malicious_loop)
         self.assertTrue(self.worker.is_alive())
         os.kill(self.server.pid, signal.SIGTERM)

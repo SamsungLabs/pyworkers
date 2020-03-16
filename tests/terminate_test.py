@@ -14,7 +14,7 @@ from pyworkers.utils import active_sleep
 
 def test_loop():
     while True:
-        active_sleep(1, interval=0.1)
+        active_sleep(1, interval=0.001)
 
 
 def malicious_loop():

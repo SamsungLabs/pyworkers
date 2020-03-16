@@ -1,8 +1,11 @@
 import sys
 import time
+import queue
 import ctypes
 import logging
 import platform
+import multiprocessing as mp
+import multiprocessing.connection
 from inspect import getfullargspec
 
 
@@ -89,6 +92,83 @@ class SupportClassPropertiesMeta(type):
         return super(SupportClassPropertiesMeta, self).__delattr__(key)
 
 
+class PipeEndpoint():
+    def __init__(self, pipe):
+        self._pipe = pipe
+
+    @property
+    def stdpipe(self):
+        return self._pipe
+
+    def fileno(self):
+        return self._pipe.fileno()
+
+    def send(self, obj):
+        return self._pipe.send(obj)
+
+    def recv(self):
+        return self._pipe.recv()
+
+    def poll(self, timeout=0):
+        if time == 0:
+            return self._pipe.poll()
+        else:
+            return self._pipe.poll(timeout)
+
+    def close(self):
+        return self._pipe.close()
+
+    def put(self, obj):
+        return self._pipe.send(obj)
+
+    def get(self, block=True, timeout=None):
+        if not block:
+            try:
+                if not self._pipe.poll():
+                    raise queue.Empty
+            except BrokenPipeError:
+                raise queue.Empty
+
+        try:
+            return self._pipe.recv()
+        except (EOFError, BrokenPipeError):
+            raise queue.Empty
+
+    def get_nowait(self):
+        return self.get(block=False)
+
+
+class Pipe():
+    def __init__(self):
+        self._endpoints = tuple(PipeEndpoint(pipe) for pipe in mp.Pipe())
+
+    @property
+    def parent_end(self):
+        return self._endpoints[0]
+
+    @property
+    def child_end(self):
+        return self._endpoints[1]
+
+
+class Queue(queue.Queue):
+    def close(self):
+        pass
+
+
+class LocalPipe():
+    def __init__(self):
+        self._q = Queue()
+
+    @property
+    def parent_end(self):
+        return self._q
+
+    @property
+    def child_end(self):
+        return self._q
+
+
 def get_hostname():
     return platform.node()
 
@@ -108,7 +188,8 @@ def is_windows():
 def foreign_raise(tid, exception):
     _ctype_tid = ctypes.c_ulong(tid) if python_is_at_least(3, 7) else ctypes.c_long(tid)
     ctypes.pythonapi.PyThreadState_SetAsyncExc(_ctype_tid, ctypes.py_object())
-    ret = ctypes.pythonapi.PyThreadState_SetAsyncExc(_ctype_tid, ctypes.py_object(exception))
+    _ctype_ex_obj = ctypes.py_object(exception) if exception is not None else ctypes.py_object()
+    ret = ctypes.pythonapi.PyThreadState_SetAsyncExc(_ctype_tid, _ctype_ex_obj)
     # ref: http://docs.python.org/c-api/init.html#PyThreadState_SetAsyncExc
     if ret == 0:
         raise ValueError("Invalid Thread ID")

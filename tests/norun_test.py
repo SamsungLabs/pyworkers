@@ -15,6 +15,9 @@ class NoRunTest(GenericTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def setUp(self):
+        pass
+
     def test_target_none(self):
         self.worker = self.create_worker(None)
         self.assertTrue(self.worker.wait(0))

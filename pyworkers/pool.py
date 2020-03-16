@@ -1,29 +1,12 @@
+import queue
 import logging
 import multiprocessing as mp
 import multiprocessing.connection
 
 from .persistent import PersistentWorker, WorkerType
-from .utils import BraceStyleAdapter
+from .utils import BraceStyleAdapter, Pipe
 
 logger = BraceStyleAdapter(logging.getLogger(__name__))
-
-
-class PipeToQueue():
-    def __init__(self, pipe):
-        self._pipe = pipe
-
-    @property
-    def pipe(self):
-        return self._pipe
-
-    def put(self, obj):
-        return self._pipe.send(obj)
-
-    def get(self):
-        return self._pipe.recv()
-
-    def close(self):
-        return self._pipe.close()
 
 
 class Pool():
@@ -75,14 +58,14 @@ class Pool():
             userid = len(self._workers)
 
         try:
-            queue = mp.connection.Pipe()
+            queue = Pipe()
             worker_kwargs = {
                 'target': self._target,
                 'args': self._args,
                 'kwargs': self._kwargs,
                 'name': name,
                 'userid': userid,
-                'results_queue': PipeToQueue(queue[0])
+                'results_pipe': queue
             }
 
             worker = PersistentWorker.create(worker_type, **worker_kwargs)
@@ -90,9 +73,7 @@ class Pool():
                 raise ValueError(f'Duplicated worker id: {worker.id}')
 
             self._workers[worker.id] = worker
-            self._queues[worker.id] = queue[1]
-            if worker.is_process:
-                queue[0].close()
+            self._queues[worker.id] = queue.parent_end
             worker = None
             self.handle_new_worker(worker)
         except:
@@ -109,28 +90,41 @@ class Pool():
         else:
             self.terminate()
 
-    def close(self, timeout=None, force=None):
+    def _close(self, timeout, force, graceful):
         if self._pool_closed:
             return
 
         timeout = timeout if timeout is not None else self.timeout
         force = force if force is not None else self.force
-        for worker in self._workers.values():
-            worker.close()
-            if not worker.wait(timeout=timeout) and force:
-                worker.terminate(force=True)
 
+        force_args = {}
+        if force is not None:
+            force_args['force'] = force
+
+        for worker in self._workers.values():
+            try:
+                alive = True
+                if graceful:
+                    worker.close()
+                    alive = not worker.wait(timeout=timeout)
+
+                if alive and (force is not False or not graceful):
+                    worker.terminate(timeout=timeout, **force_args)
+
+            except Exception:
+                logger.exception('Error occurred while {} {}', 'closing' if graceful else 'terminating', worker)
+
+        for q in self._queues.values():
+            q.close()
+
+        self._queues.clear()
         self._pool_closed = True
 
-    def terminate(self, timeout=None):
-        if self._pool_closed:
-            return
+    def close(self, timeout=None, force=None):
+        return self._close(timeout, force, True)
 
-        timeout = timeout if timeout is not None else self.timeout
-        for worker in self._workers.values():
-            worker.terminate(timeout=timeout, force=True)
-
-        self._pool_closed = True
+    def terminate(self, timeout=None, force=None):
+        return self._close(timeout, force, False)
 
 
     def run(self, *seq_generators, results_callback=None, worker_extra_pending_inputs=0):
@@ -245,7 +239,6 @@ class Pool():
 
     def handle_new_worker(self, worker):
         pass
-
 
     def _aux_connection(self, conn):
         return False

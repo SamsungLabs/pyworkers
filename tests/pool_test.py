@@ -152,6 +152,7 @@ class PoolTest(GenericTest):
             self.assertFalse(w.is_alive())
             self.assertTrue(w.has_error)
             self.assertIsNotNone(w.error)
+            print(w.error)
             self.assertIs(type(w.error), WorkerTerminatedError)
 
     def test_surprise_genocide(self):
@@ -172,9 +173,10 @@ class PoolTest(GenericTest):
                 # does not have opportunity to react to termination request
                 os.kill(w.pid, signal.SIGTERM)
 
-            unused_results = p.run(iter(i for i in range(10)))
+            results = p.run(iter(i for i in range(10)))
 
         self.assertEqual(len(p.workers), 3)
+        self.assertFalse(results)
         for w in p.workers:
             self.assertFalse(w.is_alive())
             self.assertTrue(w.has_error)
@@ -197,13 +199,14 @@ class PoolTest(GenericTest):
             pass
 
         self.assertEqual(len(p.workers), 3)
-        for w in p.workers:
-            self.assertFalse(w.is_alive())
-            self.assertTrue(w.has_error)
-            self.assertIsNotNone(w.error)
-            self.assertIs(type(w.error), WorkerTerminatedError)
+        for i, w in enumerate(p.workers):
+            with self.subTest(worker=i):
+                self.assertFalse(w.is_alive())
+                self.assertTrue(w.has_error)
+                self.assertIsNotNone(w.error)
+                self.assertIs(type(w.error), WorkerTerminatedError)
 
-    def test_early_deplate(self):
+    def test_early_deplete(self):
         p = Pool(test_fn, name='Test Pool')
         with p:
             for i in range(3):

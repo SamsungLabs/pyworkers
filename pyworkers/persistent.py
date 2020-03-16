@@ -4,10 +4,10 @@ import queue
 
 
 class PersistentWorker(Worker):
-    def __init__(self, target, results_queue, **kwargs):
-        if results_queue is None:
-            raise ValueError('results_queue should not be None')
-        self._results_queue = results_queue
+    def __init__(self, target, _results_pipe, **kwargs):
+        if _results_pipe is None:
+            raise ValueError('_results_pipe should not be None')
+        self._results_pipe = _results_pipe
         super().__init__(target, **kwargs)
         self._closed = False
 
@@ -17,27 +17,24 @@ class PersistentWorker(Worker):
         return True
 
     @property
-    def results_queue(self):
-        ''' Returns a `multiprocessing.Queue` object which will receive results from the
+    def results_endpoint(self):
+        ''' Returns a `utils.PipeEndpoint` object which will receive results from the
             child process.
             Consider also using `next_result`.
         '''
         if self.is_child:
             raise RuntimeError('results should only be access from the parent')
         
-        return self._results_queue
+        return self._results_pipe.parent_end
 
     def close(self):
         raise NotImplementedError()
 
     def next_result(self, block=True, timeout=None):
         if not self.is_alive():
-            ret = self.results_queue.get_nowait()
+            ret = self.results_endpoint.get_nowait()
         else:
-            try:
-                ret = self.results_queue.get(block=block, timeout=timeout)
-            except BrokenPipeError:
-                raise queue.Empty
+            ret = self.results_endpoint.get(block=block, timeout=timeout)
 
         unused_counter, flag, value, unused_wid = ret
         if not flag:

@@ -1,16 +1,19 @@
 from .process import ProcessWorker
 from .persistent import PersistentWorker
+from .worker import WorkerTerminatedError
+from .utils import Pipe, is_windows, active_sleep
 
 import copy
-import queue
 import multiprocessing as mp
 
 
 class PersistentProcessWorker(PersistentWorker, ProcessWorker):
-    def __init__(self, target, results_queue=None, **kwargs):
-        results_queue = results_queue or mp.Queue()
-        self._args_queue = mp.Pipe()
-        super().__init__(target, results_queue, **kwargs)
+    def __init__(self, target, results_pipe=None, **kwargs):
+        results_pipe = results_pipe or Pipe()
+        self._args_pipe = Pipe()
+        super().__init__(target,  results_pipe, **kwargs)
+        self._results_pipe.child_end.close()
+        self._args_pipe.child_end.close()
 
     #
     # Implement interface
@@ -48,7 +51,7 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
     def enqueue(self, *args, **kwargs):
         if not self.is_alive() or self._closed:
             return
-        self._args_queue[0].send((args, kwargs))
+        self._args_pipe.parent_end.send((args, kwargs))
 
     #
     # Running mechanism
@@ -58,12 +61,15 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
     def do_work(self):
         counter = 0
         self._stop = False
+        self._results_pipe.parent_end.close()
+        self._args_pipe.parent_end.close()
         try:
             while not self._stop:
                 args = copy.deepcopy(self._args)
                 kwargs = copy.deepcopy(self._kwargs)
                 try:
-                    extra = self._args_queue[1].recv()
+                    mp.connection.wait([self._args_pipe.child_end])
+                    extra = self._args_pipe.child_end.recv()
                 except EOFError:
                     break
                 if extra is None:
@@ -73,13 +79,11 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
                 kwargs.update(extra_kwargs)
                 result = self.run(*args, **kwargs)
                 counter += 1
-                self._results_queue.put((counter, True, result, self.id))
+                self._results_pipe.child_end.put((counter, True, result, self.id))
         finally:
-            self._results_queue.put((counter, False, None, self.id))
-            self._results_queue.close()
-            #self._results_queue.join_thread()
-            self._args_queue[1].close()
-            #self._args_queue.cancel_join_thread()
+            self._results_pipe.child_end.put((counter, False, None, self.id))
+            self._results_pipe.child_end.close()
+            self._args_pipe.child_end.close()
 
         return counter
 
@@ -88,9 +92,8 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
         if self._closed:
             return
         try:
-            self._args_queue[0].send(None)
+            self._args_pipe.parent_end.send(None)
         except OSError:
             pass
-        self._args_queue[0].close()
-        #self._args_queue.join_thread()
+        self._args_pipe.parent_end.close()
         self._closed = True
