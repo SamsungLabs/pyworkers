@@ -83,6 +83,15 @@ pip install sphinx sphinx_rtd_theme
 After installing `sphinx`, simply go to `docs/` and execute `make html`.
 Your newly generated documentation should be available at `docs/build/index.html`.
 
+## Running tests
+The project uses standard `unittest` Python package for testing, the tests are stored within `tests/` subdirectory and follow the `*_test.py` naming convention.
+The easiest way to run them is to navigate towards the root directory of this repo and from there run:
+```bash
+python3 -m unittest discover -v -s "." -p "*_test.py"
+```
+Alternatively, one can use VS Code with the provided `settings.json` from `.vscode` folder which configures the tests to be runnable from within the tests tab inside a VS Code window (using an analogical command to the above).
+Each test file should also be runnable by its own.
+
 ## Usage examples
 > **Tip:** You can find these examples under `docs/examples`!
 
