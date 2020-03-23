@@ -1,11 +1,13 @@
 from .worker import Worker, WorkerType, WorkerTerminatedError
 
 import os
+import sys
 import queue
 import struct
 import socket
 import signal
 import logging
+import importlib
 import traceback
 import threading
 import multiprocessing as mp
@@ -62,7 +64,7 @@ class RemoteWorkerMeta(remote_pickle.SupportRemoteGetStateMeta, SupportClassProp
 
 
 class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
-    def __init__(self, *args, host=None, **kwargs):
+    def __init__(self, *args, host=None, main_path=None, **kwargs):
         self._target_host = (get_hostname(), None)
         if host:
             if isinstance(host, str):
@@ -78,6 +80,9 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         else:
             self._target_host = ('127.0.0.1', 6006)
 
+        if main_path is None:
+            main_path = sys.modules['__main__'].__file__
+
         self._startup_sync = threading.Event()
         self._remote_side = False # tells us whether the class exists on the remote end
         self._is_backend = False # True if a class is accessed from the _run_backend
@@ -85,6 +90,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._payload = None
         self._remote_dead = False
         self._reset_sigterm_hnd = False # reset SIGTERM handler in the child process
+        self._main_path = main_path
         super().__init__(*args, **kwargs)
         assert not self.is_child
         assert not self.is_remote_side
@@ -469,12 +475,10 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._pid = os.getpid()
         self._tid = threading.get_ident()
 
+        self._aux_socket_my, self._aux_socket_ctrl = None, None
+
         try:
             result = None
-
-            logger.debug('Deserializing payload...')
-            self._target, self._args, self._kwargs = remote_pickle.loads(self._payload)
-            self._payload = None
 
             if is_windows():
                 # Extra pair of sockets to release the backend of the persistent worker
@@ -494,6 +498,21 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 logger.debug('Sending a info package to the frontend')
                 self._comms.child_end.send((self._host, self._pid, self._tid))
                 self._comms.child_end.close()
+
+                if self._main_path:
+                    logger.debug('Trying to update __main__')
+                    try:
+                        new_main_spec = importlib.util.spec_from_file_location('__new_main__', self._main_path)
+                        new_main = importlib.util.module_from_spec(new_main_spec)
+                        new_main_spec.loader.exec_module(new_main)
+                        sys.modules['__main__'] = new_main
+                    except:
+                        pass
+
+                logger.debug('Deserializing payload...')
+                self._target, self._args, self._kwargs = remote_pickle.loads(self._payload)
+                self._payload = None
+
                 logger.info('Running the main function')
                 result = self.do_work()
                 result = (True, result)
@@ -514,7 +533,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             logger.debug('Closing down backend-side socket')
             self._socket.shutdown(socket.SHUT_WR)
             self._socket.close()
-            if is_windows():
+            if is_windows() and self._aux_socket_my is not None:
                 self._aux_socket_my.close()
 
         logger.info('Backend finished')

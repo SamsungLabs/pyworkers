@@ -64,11 +64,14 @@ class RemoteServer():
             signal.signal(signal.SIGINT, release)
 
     def break_accept(self):
-        logger.debug('Trying a dummy connect to the server socket')
+        logger.debug('Trying a dummy connect to the server socket at: {}', self.addr)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cli:
-           cli.connect(self.addr)
-           #send_msg(cli, None, comment='no worker')
-           logger.debug('Dummy connect successful')
+            if self.addr[0] == '0.0.0.0':
+                cli.connect(('127.0.0.1', self.addr[1]))
+            else:
+                cli.connect(self.addr)
+            #send_msg(cli, None, comment='no worker')
+            logger.debug('Dummy connect successful')
 
     def run(self):
         if self.closed:
