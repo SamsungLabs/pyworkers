@@ -5,7 +5,12 @@ PyWorkers is a (relatively) small library wrapping and extending standard `threa
  - out-of-the-box support for running the target function multiple times,
  - lightweight support for RPC.
 
-See the following section for more detailed insights into functionality provided by the library and why it is there.
+See the following sections for more details:
+ - [Motivation and basic functionality](#motivation-and-basic-functionality)
+ - [Requirements](#requirements)
+ - [Installation](#installation)
+ - [Generating documentation](#generating-documentation)
+ - [Usage examples](#usage-examples)
 
 ## Motivation and basic functionality
 Both `threading` and `multiprocessing` are great standard python packages enabling developers to quickly create and manage parallel applications by running different parts of their code in separate threads and processes respectively.
@@ -62,7 +67,21 @@ Alternatively, the package can be installed in a *developer mode* using the `-e`
 pip install -e .
 ```
 
+## Generating documentation
+> **Note:** The documentation is still in the early phase.
+> Although quite a lot of thing has already been documented, there are some which are still missing, formatting might be broken at some places, and putting it all together might also require some extra work.
 
+To automatically generate API documentation for the library, make sure `sphinx` and `sphinx_rtd_theme` are installed first.
+You can easily install them with `pip`:
+```bash
+pip install sphinx sphinx_rtd_theme
+```
+
+> **Note:** `sphinx_rtd_theme` is only required if you want to use the readthedocs theme (the default one for this project).
+> You can change the theme used by modifying your `docs/source/conf.py` file.
+
+After installing `sphinx`, simply go to `docs/` and execute `make html`.
+Your newly generated documentation should be available at `docs/build/index.html`.
 
 ## Usage examples
 > **Tip:** You can find these examples under `docs/examples`!
