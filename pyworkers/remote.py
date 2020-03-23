@@ -493,25 +493,25 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
             self._comms.parent_end.close()
 
+            if self._main_path:
+                logger.debug('Trying to update __main__')
+                try:
+                    new_main_spec = importlib.util.spec_from_file_location('__new_main__', self._main_path)
+                    new_main = importlib.util.module_from_spec(new_main_spec)
+                    new_main_spec.loader.exec_module(new_main)
+                    sys.modules['__main__'] = new_main
+                except:
+                    pass
+
+            logger.debug('Deserializing payload...')
+            self._target, self._args, self._kwargs = remote_pickle.loads(self._payload)
+            self._payload = None
+
             try:
                 assert self.is_child
                 logger.debug('Sending a info package to the frontend')
                 self._comms.child_end.send((self._host, self._pid, self._tid))
                 self._comms.child_end.close()
-
-                if self._main_path:
-                    logger.debug('Trying to update __main__')
-                    try:
-                        new_main_spec = importlib.util.spec_from_file_location('__new_main__', self._main_path)
-                        new_main = importlib.util.module_from_spec(new_main_spec)
-                        new_main_spec.loader.exec_module(new_main)
-                        sys.modules['__main__'] = new_main
-                    except:
-                        pass
-
-                logger.debug('Deserializing payload...')
-                self._target, self._args, self._kwargs = remote_pickle.loads(self._payload)
-                self._payload = None
 
                 logger.info('Running the main function')
                 result = self.do_work()
@@ -527,6 +527,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         except Exception as e:
             logger.exception('Exception occurred in the worker code')
             result = (False, e)
+            self._comms.child_end.send((self._host, self._pid, self._tid))
+            self._comms.child_end.close()
         finally:
             logger.info('Sending result')
             send_msg(self._socket, result, 'data: result')
