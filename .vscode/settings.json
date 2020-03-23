@@ -12,6 +12,7 @@
     "cSpell.words": [
         "INET",
         "Pickler",
+        "SIGINT",
         "SIGKILL",
         "SIGTERM",
         "cleanup",
