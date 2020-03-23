@@ -10,6 +10,7 @@ See the following sections for more details:
  - [Requirements](#requirements)
  - [Installation](#installation)
  - [Generating documentation](#generating-documentation)
+ - [Running tests](#running-tests)
  - [Usage examples](#usage-examples)
 
 ## Motivation and basic functionality
