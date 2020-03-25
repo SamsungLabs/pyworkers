@@ -19,12 +19,13 @@ else:
 
 
 class RemoteServer():
-    def __init__(self, addr):
+    def __init__(self, addr, close_on_none=False):
         self.req_addr = addr
         self.addr = None
         self.socket = None
         self.children = []
         self.closed = True
+        self.close_on_none = close_on_none
 
     def open_socket(self):
         if not self.closed:
@@ -92,6 +93,10 @@ class RemoteServer():
                     logger.info('Client disconnected before child was successfully created')
                     continue
 
+                if child is None and self.close_on_none:
+                    logger.info('"None" received')
+                    break
+
                 logger.debug('Object received, appending to the list')
                 self.children.append(child)
         except (WorkerTerminatedError, KeyboardInterrupt):
@@ -116,8 +121,9 @@ class RemoteServer():
 
 
 class RemoteServerProcess(ProcessWorker):
-    def __init__(self, addr, name=None):
+    def __init__(self, addr, name=None, close_on_none=False):
         self._addr = addr
+        self._close_on_none = close_on_none
         super().__init__(target=None, args=None, kwargs=None, name=name, run=True)
 
     def _start(self):
@@ -133,7 +139,7 @@ class RemoteServerProcess(ProcessWorker):
         return self._addr
 
     def run(self):
-        self._server = RemoteServer(self._addr)
+        self._server = RemoteServer(self._addr, self._close_on_none)
         self._server.open_socket()
         self._comms.child_end.send(self._server.addr)
         self._server.install_handlers()
@@ -143,8 +149,25 @@ class RemoteServerProcess(ProcessWorker):
         self._server.break_accept()
 
 
-def spawn_server(addr):
-    return RemoteServerProcess(addr)
+def spawn_server(addr, close_on_none=False):
+    return RemoteServerProcess(addr, close_on_none=close_on_none)
+
+
+def run_server(addr, install_handlers=True, close_on_none=True):
+    server = RemoteServer(addr, close_on_none=close_on_none)
+    server.open_socket()
+    if install_handlers:
+        server.install_handlers()
+
+    if is_windows():
+        import threading
+        t = threading.Thread(target=server.run)
+        t.start()
+        while t.is_alive():
+            import time
+            time.sleep(1)
+    else:
+        server.run()
 
 
 if __name__ == '__main__':
@@ -155,6 +178,7 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', '-v', action='count', default=0, help='Specifies output verbosity, each appearance of this argument increases verbosity bye 1.'
         ' The default verbosity is inherited from the default of a Logger object from python\'s logging module, that is only warnings and errors should be printed.'
         ' Verbosity of 1 adds generic informations to the output and 2 enables debug output. Values above 2 do not add anything.')
+    parser.add_argument('--close_on_none', action='store_true', help='Close server after receiving None')
     args = parser.parse_args()
 
     ch = logging.StreamHandler()
@@ -166,16 +190,4 @@ if __name__ == '__main__':
         ch.setLevel(logging.DEBUG)
     logger.logger.addHandler(ch)
 
-    server = RemoteServer((args.addr, args.port))
-    server.open_socket()
-    server.install_handlers()
-
-    if is_windows():
-        import threading
-        t = threading.Thread(target=server.run)
-        t.start()
-        while t.is_alive():
-            import time
-            time.sleep(1)
-    else:
-        server.run()
+    run_server((args.addr, args.port), install_handlers=True, close_on_none=args.close_on_none)
