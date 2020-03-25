@@ -41,8 +41,12 @@ def recv_msg(sock, state_overwrites=None, comment=None):
         raise ConnectionClosedError() from e
 
     logger.debug('Receiving a message: {} ({})', data_len, comment)
+    data = bytes()
     try:
-        data = sock.recv(data_len)
+        while data_len:
+            chunk = sock.recv(min(4096, data_len))
+            data_len -= len(chunk)
+            data += chunk
     except (ConnectionResetError) as e:
         raise ConnectionClosedError() from e
     logger.debug('Message received ({}), deserializing...', comment)
