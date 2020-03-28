@@ -11,7 +11,7 @@ if __name__ == '__main__':
             'args': (x, )
         }
         if wtype is WorkerType.REMOTE:
-            kwargs['host'] = ('127.0.0.1', 6006)
+            kwargs['host'] = ('127.0.0.1', 60006)
 
         worker = Worker.create(wtype, **kwargs)
         workers.append(worker)

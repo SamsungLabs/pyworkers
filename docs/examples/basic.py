@@ -12,7 +12,7 @@ if __name__ == '__main__':
     pw = ProcessWorker(target=foo, args=(2,))
     pw.wait()
 
-    rw = RemoteWorker(target=foo, args=(3,), host=('127.0.0.1', 6006))
+    rw = RemoteWorker(target=foo, args=(3,), host=('127.0.0.1', 60006))
     rw.wait()
 
     print(tw.result, pw.result, rw.result)

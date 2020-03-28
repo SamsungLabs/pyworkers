@@ -25,7 +25,7 @@ class GenericTest():
     def setUp(self):
         if self.target_cls == WorkerType.REMOTE or (not isinstance(self.target_cls, WorkerType) and self.target_cls.is_remote):
             from pyworkers.remote_server import spawn_server
-            self.server = spawn_server(('127.0.0.1', 6006))
+            self.server = spawn_server(('127.0.0.1', 60006))
             assert self.server.is_alive(), self.server.error
 
     def tearDown(self):

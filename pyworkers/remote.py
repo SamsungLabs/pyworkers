@@ -18,6 +18,8 @@ from .utils import get_hostname, foreign_raise, is_windows, BraceStyleAdapter, c
 
 logger = BraceStyleAdapter(logging.getLogger(__name__))
 
+default_port = 60006
+
 
 class ConnectionClosedError(Exception):
     pass
@@ -76,13 +78,13 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                     host, port = host.rsplit(':', maxsplit=1)
                     self._target_host = (socket.gethostbyname(host), int(port))
                 else:
-                    self._target_host = (socket.gethostbyname(host), 6006)
+                    self._target_host = (socket.gethostbyname(host), default_port)
             else:
                 if not isinstance(host, tuple) or len(host) != 2:
                     raise TypeError('Invalid type for "host" parameter: {}'.format(type(host).__name__))
                 self._target_host = (socket.gethostbyname(host[0]), host[1])
         else:
-            self._target_host = ('127.0.0.1', 6006)
+            self._target_host = ('127.0.0.1', default_port)
 
         if main_path is None:
             main_path = sys.modules['__main__'].__file__

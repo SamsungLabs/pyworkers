@@ -111,7 +111,7 @@ if __name__ == '__main__':
     pw = ProcessWorker(target=foo, args=(2,))
     pw.wait()
 
-    rw = RemoteWorker(target=foo, args=(3,), host=('127.0.0.1', 6006))
+    rw = RemoteWorker(target=foo, args=(3,), host=('127.0.0.1', 60006))
     rw.wait()
 
     print(tw.result, pw.result, rw.result)
@@ -121,13 +121,13 @@ Should print `1, 4, 9`.
 
 Please note that there's no extra `start` method which needs to be called after a worker is created. Instead, the constructor automatically spawns a worker to make sure that the object is valid (e.g. pid) as soon as the it is created.
 
-> **Note:** The remote worker in this example assumes that there is a remote server running locally on the TCP port 6006. This server can be created programmatically by including the following code (creates a child process):
+> **Note:** The remote worker in this example assumes that there is a remote server running locally on the TCP port 60006. This server can be created programmatically by including the following code (creates a child process):
 > ```python
 > ...
 > from pyworkers.remote_server import spawn_server
 > 
 > if __name__ == '__main__':
->     server = spawn_server(('127.0.0.1', 6006)) # returns ProcessWorker!
+>     server = spawn_server(('127.0.0.1', 60006)) # returns ProcessWorker!
 >     try:
 >         ...
 >     finally:
@@ -135,7 +135,7 @@ Please note that there's no extra `start` method which needs to be called after 
 > ```
 > or run as a standalone process by executing the `pyworkers.remote_server` module:
 > ```bash
-> python3 -m pyworkers.remote_server -v --addr 127.0.0.1 --port 6006
+> python3 -m pyworkers.remote_server -v --addr 127.0.0.1 --port 60006
 > ```
 > It is also possible to run the server programatically in the calling thread by using `RemoteServer` class from `pyworkers.remote_server` directly, instead of using it via `spawn_server` and `RemoteServerProcess`, but care should be taken when doing so as `accept` (which is called on the server socket) is tricky to interrupt.
 
@@ -155,7 +155,7 @@ if __name__ == '__main__':
             'args': (x, )
         }
         if wtype is WorkerType.REMOTE:
-            kwargs['host'] = ('127.0.0.1', 6006)
+            kwargs['host'] = ('127.0.0.1', 60006)
 
         worker = Worker.create(wtype, **kwargs)
         workers.append(worker)
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     for wtype in WorkerType:
         kwargs = { 'target': foo }
         if wtype is WorkerType.REMOTE:
-            kwargs['host'] = ('127.0.0.1', 6006)
+            kwargs['host'] = ('127.0.0.1', 60006)
 
         worker = PersistentWorker.create(wtype, **kwargs)
         workers.append(worker)
