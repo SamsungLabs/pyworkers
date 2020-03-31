@@ -327,7 +327,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     root_logger = logging.getLogger()
-    target_logger = root_logger if not args.suppress_children else logger
+    target_logger = root_logger if not args.suppress_children else logger.logger
 
     ch = logging.StreamHandler()
     if args.verbose == 1:
@@ -336,6 +336,7 @@ if __name__ == '__main__':
     elif args.verbose >= 2:
         target_logger.setLevel(logging.DEBUG)
         ch.setLevel(logging.DEBUG)
-    target_logger.logger.addHandler(ch)
+
+    target_logger.addHandler(ch)
 
     run_server((args.addr, args.port), install_handlers=True, close_on_none=args.close_on_none)
