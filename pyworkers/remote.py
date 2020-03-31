@@ -258,7 +258,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                         self._socket.close()
                     except ConnectionClosedError:
                         pass
-            
+
             alive = self._child.is_alive()
             if not alive:
                 self._dead = True
@@ -306,7 +306,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._child.join(timeout)
             if self._child.is_alive() and force:
                 os.kill(os.getpid(), signal.SIGTERM)
-            
+
             alive = self._child.is_alive()
             if not alive:
                 self._dead = True
@@ -315,7 +315,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     def _get_result(self):
         if not hasattr(self, '_result'):
             return None
-        
+
         return self._result
 
     #
@@ -352,7 +352,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
         logger.debug('Sending self to the server to initialize backend...')
         send_msg(self._socket, self, comment='data: initial remote worker') # this will spawn a backend at the remote side, via __getstate__(remote=True) and __setstate__
-        
+
         incoming = self._ctrl_sock
         logger.debug('Waiting for a connect to the control socket from the backend')
         self._ctrl_sock, ctrl_peer = incoming.accept()
@@ -367,7 +367,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         logger.debug('Closing down frontend-side socket')
         self._socket.close()
         logger.info('Frontend thread finished')
-    
+
     # Parent-side, called from frontend (controlling thread)
     # Helper function implementing results fetching mechanism
     # here simply wait for the result
@@ -454,9 +454,10 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
             # Receiving runtime info is a signal for us that everything is ok
             runtime_info = self._comms.parent_end.recv()
-            self._comms.parent_end.close()
             self._host, self._pid, self._tid = runtime_info
             send_msg(self._ctrl_sock, runtime_info, comment='ctrl: runtime info')
+            self._comms.parent_end.send(True)
+            self._comms.parent_end.close()
         elif self._remote_side:
             assert self._remote_side
             assert not self._is_backend
@@ -474,7 +475,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
         set_linger(self._socket, True, 5)
-        
+
         self._is_backend = True
 
         logger.debug('Getting runtime info')
@@ -518,6 +519,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 assert self.is_child
                 logger.debug('Sending a info package to the frontend')
                 self._comms.child_end.send((self._host, self._pid, self._tid))
+                sync = self._comms.child_end.recv()
                 self._comms.child_end.close()
 
                 logger.info('Running the main function')
@@ -535,7 +537,12 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             logger.exception('Exception occurred in the worker code')
             result = (False, e)
             self._comms.child_end.send((self._host, self._pid, self._tid))
+            sync = self._comms.child_end.recv()
             self._comms.child_end.close()
+            if hasattr(self, '_ctrl_thread_loc') and self._ctrl_thread_loc.is_alive():
+                logger.info('Releasing the local control thread')
+                self._ctrl_comms.parent_end.send(None)
+                self._ctrl_thread_loc.join()
         finally:
             logger.info('Sending result')
             send_msg(self._socket, result, 'data: result')
