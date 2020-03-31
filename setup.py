@@ -25,7 +25,7 @@ class build_maybe_inplace(install):
 
 
 setup(name='PyWorkers',
-      version=package_version.__version__,
+      version=package_version.version,
       description='Library providing abstraction over different types of parallel jobs: threads, processes and remote processes.',
       author='Łukasz Dudziak (SAIC-Cambridge, On-Device Team)',
       author_email='l.dudziak@samsung.com',
