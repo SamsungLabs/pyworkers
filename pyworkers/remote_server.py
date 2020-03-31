@@ -269,7 +269,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None):
                 ssh_proc.stdin.write(b'\x03')
                 ssh_proc.stdin.flush()
                 ssh_proc.stdin.close()
-            except BrokenPipeError:
+            except (BrokenPipeError, OSError):
                 pass
 
             self.ctrl_c = True
@@ -303,7 +303,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None):
                 break
 
         if not server_running:
-            raise RuntimeError('Could not create a server process')
+            raise RuntimeError('Could not create a server process:\n' + ssh_proc.stdout)
 
         yield ssh_proc
         try:
