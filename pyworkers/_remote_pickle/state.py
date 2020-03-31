@@ -16,6 +16,7 @@ class RemoteState(dict):
             assert not hasattr(RemoteState._active_contexts, 'ctxs')
             RemoteState._active_contexts.stack = []
             RemoteState._active_contexts.iter = -1
+            RemoteState._active_contexts.unused = True
 
         def __enter__(self):
             if self:
@@ -24,8 +25,10 @@ class RemoteState(dict):
 
         def __exit__(self, *exc):
             if exc[0] is None:
-                assert RemoteState._active_contexts.iter == -1, RemoteState._active_contexts.iter
-                assert not RemoteState._active_contexts.stack, RemoteState._active_contexts.stack
+                if not RemoteState._active_contexts.unused:
+                    #TODO: report warning if state is not empty but was unused?
+                    assert RemoteState._active_contexts.iter == -1, RemoteState._active_contexts.iter
+                    assert not RemoteState._active_contexts.stack, RemoteState._active_contexts.stack
                 del RemoteState._active_contexts.stack
                 del RemoteState._active_contexts.iter
 
@@ -96,6 +99,7 @@ class RemoteState(dict):
     @classmethod
     def child_restored(cls, obj):
         assert cls.patches_iter() == len(cls._active_contexts.stack) - 1
+        cls._active_contexts.unused = False
         patches = cls.current_patches()
         if patches is not None:
             obj_name = cls.current_child_name()
