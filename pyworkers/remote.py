@@ -10,6 +10,7 @@ import logging
 import importlib
 import traceback
 import threading
+import collections
 import multiprocessing as mp
 import multiprocessing.connection
 
@@ -80,7 +81,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 else:
                     self._target_host = (socket.gethostbyname(host), default_port)
             else:
-                if not isinstance(host, tuple) or len(host) != 2:
+                if not isinstance(host, collections.Sequence) or len(host) != 2:
                     raise TypeError('Invalid type for "host" parameter: {}'.format(type(host).__name__))
                 self._target_host = (socket.gethostbyname(host[0]), host[1])
         else:
