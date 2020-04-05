@@ -1,5 +1,7 @@
 import os
+import copy
 import threading
+import contextlib
 from enum import Enum
 
 from .utils import get_hostname, classproperty, SupportClassPropertiesMeta
@@ -18,30 +20,36 @@ class WorkerTerminatedError(Exception):
 
 
 class Worker(metaclass=SupportClassPropertiesMeta):
+    _active_children = []
+    _children_lock = threading.Lock()
+
     def __init__(self, target, *, args=None, kwargs=None, name=None, userid=None, run=None):
-        ''' target - function to call or None.
-            args - default arguments to pass to `target`
-            kwargs - default keyword arguments to pass to `target`
-            name - user defined name of the worker
-            userid - user defined identifier of the worker
-            run - a flag telling whether to actually run the worker
+        ''' Constructor of the base :py:class:`Worker` class. Should be called by derived classes.
 
             Each worker can either be run, or assumed dead immediately up-front, in which
             case creating a worker object doesn't have any side effects (like creating a thread).
             The latter use-case is implemented mostly for tests and as an optimization in cases
-            `target` happen to be None (so there's nothing to call == nothing to do).
-            By default, the behaviour is to run the worker if `target` is not None and
+            ``target`` happen to be ``None`` (so there's nothing to call == nothing to do).
+            By default, the behaviour is to run the worker if ``target`` is not ``None`` and
             otherwise skip running. However, in some cases it might be desired to run the worker
-            regardless of `target` being None - with deriving from Worker and implementing target
-            function directly in `run` instead of passing it via `target` here. In those cases,
-            creation of the worker can be forced by setting `run` argument to True. Analogically,
-            it can be set to False to forcibly skip running of the worker even if `target` is provided.
-            The default value for `run` is None meaning to determine whether to run the worker based
-            on `target` - as mentioned earlier.
+            regardless of ``target`` being ``None`` - with deriving from Worker and implementing target
+            function directly in `run` instead of passing it via ``target`` here. In those cases,
+            creation of the worker can be forced by setting ``run`` argument to ``True``. Analogically,
+            it can be set to False to forcibly skip running of the worker even if ``target`` is provided.
+            The default value for ``run`` is None meaning to determine whether to run the worker based
+            on ``target`` - as mentioned earlier.
 
-            A worker which is not run - either in case of `target is None and run is None` or `run is False` -
+            A worker which is not run - either because ``target is None and run is None`` or ``run is False`` -
             will be assumed dead as soon as the object is created (i.e. is_alive() should return False, all waiting
-            function should not block, etc.). Its result is set to `has_error = False, result = None, error = None`.
+            function should not block, etc.). Its result is set to ``has_error = False, result = None, error = None``.
+
+            Arguments:
+                target : function to call or ``None``.
+                args : default arguments to pass to ``target``
+                kwargs : default keyword arguments to pass to ``target``
+                name : user defined name of the worker
+                userid : user defined identifier of the worker
+                run : a flag telling whether to actually run the worker
         '''
         if target is not None and target is not False and not callable(target):
             raise ValueError('Target not callable')
@@ -61,16 +69,23 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             self._started = True
             self._dead = True # should be set to False by the derived class, after a child is actually created
             self._start()
+            if not self._dead:
+                with Worker._children_lock:
+                    Worker._children.append(self)
         else:
             self._started = False
             self._result = (True, None)
 
-    #def __del__(self):
-    #    if not self._is_child:
-    #        self.terminate()
-
     def __repr__(self):
         return f'{type(self).__name__}(name: {self.name!r}, userid: {self.userid}, id: {self.id}, target: {self._target})'
+
+    @staticmethod
+    def active_children():
+        with Worker._children_lock:
+            Worker._children = [child for child in Worker._children if child.is_alive()]
+            cpy = copy.copy(Worker._children)
+        for child in cpy:
+            yield child
 
     @classmethod
     def create(cls, worker_type, *args, **kwargs):
@@ -197,10 +212,10 @@ class Worker(metaclass=SupportClassPropertiesMeta):
 
     @property
     def result(self):
-        ''' Return result of the `do_work` function, if it has been executed gracefully.
+        ''' Return result of the :py:meth:`do_work` function, if it has been executed gracefully.
             Otherwise (worker still running or died due to an exception) return None.
             This function does not synchronize the caller with the worker - use `wait` to do that.
-            In case the `do_work` function can return None, use `has_error` to determine whether the
+            In case the :py:meth:`do_work` function can return None, use `has_error` to determine whether the
             function has finished gracefully or not.
         '''
         r = self._get_result()
@@ -385,3 +400,14 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             This function is never called for thread workers, as the child process doesn't exist.
         '''
         pass
+
+
+@contextlib.contextmanager
+def autoclose_active_children():
+    try:
+        yield
+    finally:
+        for child in Worker.active_children():
+            child.close()
+            if not child.wait():
+                child.terminate()
