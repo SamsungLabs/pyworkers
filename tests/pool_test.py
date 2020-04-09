@@ -202,9 +202,8 @@ class PoolTest(GenericTest):
         for i, w in enumerate(p.workers):
             with self.subTest(worker=i):
                 self.assertFalse(w.is_alive())
-                self.assertTrue(w.has_error)
-                self.assertIsNotNone(w.error)
-                self.assertIs(type(w.error), WorkerTerminatedError)
+                self.assertFalse(w.has_error)
+                self.assertIsNone(w.error)
 
     def test_early_deplete(self):
         p = Pool(test_fn, name='Test Pool')

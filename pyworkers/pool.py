@@ -28,6 +28,7 @@ class Pool():
         self._pending = 0
         self._depleted = False
         self._closed = set()
+        self._pending_per_worker = {}
 
     @property
     def timeout(self):
@@ -111,7 +112,7 @@ class Pool():
             try:
                 alive = True
                 worker.close()
-                if graceful or not self._pending_per_worker[worker.id]:
+                if graceful or not self._pending_per_worker.get(worker.id, None):
                     alive = not worker.wait(timeout=timeout)
                 else:
                     alive = not worker.wait(timeout=0.1)
