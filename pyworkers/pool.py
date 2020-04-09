@@ -3,6 +3,7 @@ import logging
 import multiprocessing as mp
 import multiprocessing.connection
 
+from .worker import Worker
 from .persistent import PersistentWorker, WorkerType
 from .utils import BraceStyleAdapter, Pipe
 
@@ -68,7 +69,11 @@ class Pool():
                 'results_pipe': queue
             }
 
-            worker = PersistentWorker.create(worker_type, **worker_kwargs)
+            if isinstance(worker_type, WorkerType):
+                worker = PersistentWorker.create(worker_type, **worker_kwargs)
+            else:
+                worker = worker_type(**worker_kwargs)
+
             if worker.id in self._workers:
                 raise ValueError(f'Duplicated worker id: {worker.id}')
 
@@ -82,7 +87,7 @@ class Pool():
             raise
 
     def __enter__(self):
-        pass
+        return self
 
     def __exit__(self, *exc):
         if exc[0] is None:
@@ -94,6 +99,7 @@ class Pool():
         if self._pool_closed:
             return
 
+        logger.info('Closing pool: {}{}', self._name, '' if graceful else ' due to error')
         timeout = timeout if timeout is not None else self.timeout
         force = force if force is not None else self.force
 
@@ -104,12 +110,17 @@ class Pool():
         for worker in self._workers.values():
             try:
                 alive = True
-                if graceful:
-                    worker.close()
+                worker.close()
+                if graceful or not self._pending_per_worker[worker.id]:
                     alive = not worker.wait(timeout=timeout)
+                else:
+                    alive = not worker.wait(timeout=0.1)
 
                 if alive and (force is not False or not graceful):
+                    logger.info('Terminating worker {}', worker.id)
                     worker.terminate(timeout=timeout, **force_args)
+                else:
+                    logger.debug('Worker {} closed gracefully', worker.id)
 
             except Exception:
                 logger.exception('Error occurred while {} {}', 'closing' if graceful else 'terminating', worker)
@@ -127,7 +138,7 @@ class Pool():
         return self._close(timeout, force, False)
 
 
-    def run(self, *seq_generators, results_callback=None, worker_extra_pending_inputs=0):
+    def run(self, *input_sources, results_callback=None, enqueue_callback=None, worker_extra_pending_inputs=0, return_results=True):
         if self._pool_closed:
             raise RuntimeError('Trying to use a closed Pool')
         if self._map_guard:
@@ -142,18 +153,18 @@ class Pool():
             self._pending_per_worker = { worker.id: 0 for worker in self.workers }
             ret = []
 
-            def next_inputs():
+            def next_inputs(worker):
                 if self._depleted:
                     return None
                 try:
-                    return tuple([next(gen) for gen in seq_generators])
+                    return tuple([source(worker) if callable(source) else next(source) for source in input_sources])
                 except StopIteration:
                     logger.debug('At least one input sequence has been depleted - no more data will be enqueued to any worker')
                     self._depleted = True
                     return None
 
             def enqueue(worker):
-                inp = next_inputs()
+                inp = next_inputs(worker)
                 if not self._depleted:
                     if worker.id in self._closed:
                         logger.warning('Requested to enqueue new data to {} but the worker is closed - enqueue will be ignored', worker)
@@ -161,8 +172,16 @@ class Pool():
                     if worker.id in self._finished:
                         logger.warning('Requested to enqueue new data to {} but the worker has already finished running - enqueue will be ignored', worker)
                         return
+
                     logger.debug('Enqueuing new data to {}', worker)
-                    worker.enqueue(*inp)
+                    if enqueue_callback:
+                        if not enqueue_callback(worker, *inp):
+                            logger.debug('Enqueue callback returned False, closing worker {}', worker)
+                            self._closed.add(worker.id)
+                            return False
+                    else:
+                        worker.enqueue(*inp)
+
                     self._pending += 1
                     self._pending_per_worker[worker.id] += 1
                     logger.debug('Current pending results: {}, for {} only: {}', self._pending, worker, self._pending_per_worker[worker.id])
@@ -225,7 +244,8 @@ class Pool():
                         logger.debug('New result received from {}, total pending: {}, for this worker: {}', worker, self._pending, self._pending_per_worker[wid])
                         if results_callback is not None:
                             result = results_callback(worker, result)
-                        ret.append(result)
+                        if return_results:
+                            ret.append(result)
                         if worker.id not in self._closed:
                             logger.debug('Trying to enqueue new data for {}', worker)
                             if not enqueue(worker) and not self._pending_per_worker[wid]:
@@ -234,7 +254,8 @@ class Pool():
         finally:
             self._map_guard = False
 
-        return ret
+        if return_results:
+            return ret
 
 
     def handle_new_worker(self, worker):

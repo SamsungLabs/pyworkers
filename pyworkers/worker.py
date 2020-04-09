@@ -71,7 +71,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             self._start()
             if not self._dead:
                 with Worker._children_lock:
-                    Worker._children.append(self)
+                    Worker._active_children.append(self)
         else:
             self._started = False
             self._result = (True, None)
@@ -82,8 +82,8 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     @staticmethod
     def active_children():
         with Worker._children_lock:
-            Worker._children = [child for child in Worker._children if child.is_alive()]
-            cpy = copy.copy(Worker._children)
+            Worker._children = [child for child in Worker._active_children if child.is_alive()]
+            cpy = copy.copy(Worker._active_children)
         for child in cpy:
             yield child
 

@@ -4,7 +4,12 @@ from .utils import foreign_raise, classproperty
 import os
 import queue
 import signal
+import logging
 import threading
+
+from .utils import BraceStyleAdapter
+
+logger = BraceStyleAdapter(logging.getLogger(__name__))
 
 
 class ThreadWorker(Worker):
@@ -110,5 +115,6 @@ class ThreadWorker(Worker):
         try:
             assert self.is_child
             self._result = (True, self.do_work())
-        except Exception as e:
+        except BaseException as e:
+            logger.exception('Exception occurred while running the main function')
             self._result = (False, e)
