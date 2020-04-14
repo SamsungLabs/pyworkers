@@ -11,8 +11,7 @@ class RemotePickler36(pickle.Pickler):
         from ..remote_pickle import SupportRemoteGetState # pylint: disable(relative-beyond-top-level)
         return type(obj) in SupportRemoteGetState.supported_classes
 
-    @staticmethod
-    def remote_reduce(obj):
+    def remote_reduce(self, obj):
         assert getattr(type(obj), '__reduce_ex__') is object.__reduce_ex__, obj.__reduce_ex__
         assert getattr(type(obj), '__reduce__') is object.__reduce__, obj.__reduce__
 
@@ -43,7 +42,7 @@ class RemotePickler36(pickle.Pickler):
             raise RuntimeError('Internal bad call')
 
         # _PyObject_GetState from https://github.com/python/cpython/blob/1b55b65638254aa78b005fbf0b71fb02499f1852/Objects/typeobject.c#L4207
-        state = obj.__getstate__(remote=True)
+        state = obj.__getstate__(remote=self._remote)
 
         # _PyObject_GetItemsIter from https://github.com/python/cpython/blob/1b55b65638254aa78b005fbf0b71fb02499f1852/Objects/typeobject.c#L4444
         listitems = None if not isinstance(obj, list) else obj.__iter__()
@@ -61,9 +60,10 @@ class RemotePickler36(pickle.Pickler):
 
         return (newobj, newargs, state, listitems, dictitems)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, remote=True, **kwargs):
         from ..remote_pickle import SupportRemoteGetState
         super().__init__(*args, **kwargs)
+        self._remote = remote
         self.dispatch_table = {}
         for cls in SupportRemoteGetState.supported_classes:
-            self.dispatch_table[cls] = RemotePickler36.remote_reduce
+            self.dispatch_table[cls] = self.remote_reduce

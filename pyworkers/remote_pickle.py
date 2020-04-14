@@ -78,16 +78,16 @@ from ._remote_pickle.remote_pickler_3_6 import RemotePickler36 as RemotePickler
 import pickle
 
 
-def remote_dump(obj, file, protocol=None, **kwargs):
-    p = RemotePickler(file, protocol, **kwargs)
+def remote_dump(obj, file, protocol=None, remote=True, **kwargs):
+    p = RemotePickler(file, protocol, remote=remote, **kwargs)
     p.dump(obj)
     import pickle
     pickle.dump()
 
 
-def remote_dumps(obj, protocol=None, **kwargs):
+def remote_dumps(obj, protocol=None, remote=True, **kwargs):
     buff = io.BytesIO()
-    p = RemotePickler(buff, protocol, **kwargs)
+    p = RemotePickler(buff, protocol, remote=remote, **kwargs)
     p.dump(obj)
     return buff.getvalue()
 
