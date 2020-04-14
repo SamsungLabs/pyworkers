@@ -52,7 +52,7 @@ class Pool():
     def workers(self):
         return self._get_all_workers()
 
-    def add_worker(self, worker_type, name=None, userid=None):
+    def add_worker(self, worker_type, name=None, userid=None, **worker_kwargs):
         worker = None
         if name is None:
             name = '{} worker {}'.format(self._name, len(self._workers))
@@ -62,6 +62,7 @@ class Pool():
         try:
             queue = Pipe()
             worker_kwargs = {
+                **worker_kwargs,
                 'target': self._target,
                 'args': self._args,
                 'kwargs': self._kwargs,
@@ -100,7 +101,7 @@ class Pool():
         if self._pool_closed:
             return
 
-        logger.info('Closing pool: {}{}', self._name, '' if graceful else ' due to error')
+        logger.info('Closing pool: {!r}{}', self._name, '' if graceful else ' due to error')
         timeout = timeout if timeout is not None else self.timeout
         force = force if force is not None else self.force
 
@@ -110,6 +111,14 @@ class Pool():
 
         for worker in self._workers.values():
             try:
+                if not worker.is_alive():
+                    if worker.has_error:
+                        logger.debug('Worker {} has already died with error: {}', worker.id, worker.error)
+                    else:
+                        logger.debug('Worker {} already closed', worker.id)
+
+                    continue
+
                 alive = True
                 worker.close()
                 if graceful or not self._pending_per_worker.get(worker.id, None):
