@@ -62,6 +62,24 @@ def set_linger(sock, enable, timeout):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, opt_bytes)
 
 
+def sanitize_target_host(host):
+    if host:
+        if isinstance(host, str):
+            if ':' in host:
+                host, port = host.rsplit(':', maxsplit=1)
+                ret = (socket.gethostbyname(host), int(port))
+            else:
+                ret = (socket.gethostbyname(host), default_port)
+        else:
+            if not isinstance(host, collections.Sequence) or len(host) != 2:
+                raise TypeError('Invalid type for "host" parameter: {}'.format(type(host).__name__))
+            ret = (socket.gethostbyname(host[0]), host[1])
+    else:
+        ret = ('127.0.0.1', default_port)
+
+    return ret
+
+
 class GracefulExitError(Exception):
     pass
 
@@ -71,22 +89,8 @@ class RemoteWorkerMeta(remote_pickle.SupportRemoteGetStateMeta, SupportClassProp
 
 
 class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
-    def __init__(self, *args, host=None, main_path=None, **kwargs):
-        self._target_host = (get_hostname(), None)
-        if host:
-            if isinstance(host, str):
-                if ':' in host:
-                    host, port = host.rsplit(':', maxsplit=1)
-                    self._target_host = (socket.gethostbyname(host), int(port))
-                else:
-                    self._target_host = (socket.gethostbyname(host), default_port)
-            else:
-                if not isinstance(host, collections.Sequence) or len(host) != 2:
-                    raise TypeError('Invalid type for "host" parameter: {}'.format(type(host).__name__))
-                self._target_host = (socket.gethostbyname(host[0]), host[1])
-        else:
-            self._target_host = ('127.0.0.1', default_port)
-
+    def __init__(self, *args, host=None, context=None, main_path=None, **kwargs):
+        self._target_host = sanitize_target_host(host)
         if main_path is None:
             main_path = sys.modules['__main__'].__file__
 
@@ -95,9 +99,12 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._is_backend = False # True if a class is accessed from the _run_backend
         self._from_remote_parent = False # used only to detect payloads passed to __setstate__ which were received from the remote part
         self._payload = None
+        self._context = context
         self._remote_dead = False
         self._reset_sigterm_hnd = False # reset SIGTERM handler in the child process
         self._main_path = main_path
+        if context is not None:
+            kwargs.setdefault('run', True)
         super().__init__(*args, **kwargs)
         assert not self.is_child
         assert not self.is_remote_side
@@ -351,6 +358,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         assert threading.get_ident() != self._tid # different thread
 
         logger.debug('Sending self to the server to initialize backend...')
+        send_msg(self._socket, (self._context, True), comment='data: header')
         send_msg(self._socket, self, comment='data: initial remote worker') # this will spawn a backend at the remote side, via __getstate__(remote=True) and __setstate__
 
         incoming = self._ctrl_sock
@@ -401,7 +409,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             state['_socket'] = None # _socket will be injected by the server on the remote side
             state['_startup_sync'] = None
             state['_ctrl_sock'] = self._ctrl_sock.getsockname()
-            state['_payload'] = remote_pickle.dumps((self._target, self._args, self._kwargs))
+            if self._context is None:
+                state['_payload'] = remote_pickle.dumps((self._target, self._args, self._kwargs))
             del state['_target']
             del state['_args']
             del state['_kwargs']
@@ -423,7 +432,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             assert self._socket is not None # should be injected to 'state' by the server
             assert not self._remote_side
             assert not self._is_backend
-            assert self._payload is not None
+            assert self._payload is not None or self._context is not None
 
             self._from_remote_parent = False
             self._remote_side = True
@@ -448,7 +457,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._payload = None
 
             self._startup_sync = threading.Event()
-            self._ctrl_thread_rem = threading.Thread(target=self._ctrl_fn_remote)
+            self._ctrl_thread_rem = threading.Thread(target=self._ctrl_fn_remote, name=f'{self._name} remote control thread')
             self._ctrl_thread_rem.start()
             self._startup_sync.wait()
 
@@ -511,15 +520,19 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 except:
                     pass
 
-            logger.debug('Deserializing payload...')
-            self._target, self._args, self._kwargs = remote_pickle.loads(self._payload)
-            self._payload = None
+            if not hasattr(self, '_target'):
+                assert self._payload is not None
+                logger.debug('Deserializing payload...')
+                self._target, self._args, self._kwargs = remote_pickle.loads(self._payload)
+                self._payload = None
+            else:
+                assert self._payload is None
 
             try:
                 assert self.is_child
                 logger.debug('Sending a info package to the frontend')
                 self._comms.child_end.send((self._host, self._pid, self._tid))
-                sync = self._comms.child_end.recv()
+                unused_sync = self._comms.child_end.recv()
                 self._comms.child_end.close()
 
                 logger.info('Running the main function')
@@ -537,7 +550,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             logger.exception('Exception occurred in the worker code')
             result = (False, e)
             self._comms.child_end.send((self._host, self._pid, self._tid))
-            sync = self._comms.child_end.recv()
+            unused_sync = self._comms.child_end.recv()
             self._comms.child_end.close()
             if hasattr(self, '_ctrl_thread_loc') and self._ctrl_thread_loc.is_alive():
                 logger.info('Releasing the local control thread')

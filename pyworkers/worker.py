@@ -70,8 +70,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             self._dead = True # should be set to False by the derived class, after a child is actually created
             self._start()
             if not self._dead:
-                with Worker._children_lock:
-                    Worker._active_children.append(self)
+                Worker.register_child(self)
         else:
             self._started = False
             self._result = (True, None)
@@ -86,6 +85,11 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             cpy = copy.copy(Worker._active_children)
         for child in cpy:
             yield child
+
+    @staticmethod
+    def register_child(child):
+        with Worker._children_lock:
+            Worker._active_children.append(child)
 
     @classmethod
     def create(cls, worker_type, *args, **kwargs):
@@ -403,11 +407,11 @@ class Worker(metaclass=SupportClassPropertiesMeta):
 
 
 @contextlib.contextmanager
-def autoclose_active_children():
+def autoclose_active_children(timeout=0.1):
     try:
         yield
     finally:
         for child in Worker.active_children():
             child.close()
-            if not child.wait():
-                child.terminate()
+            if not child.wait(timeout=0.1):
+                child.terminate(timeout=0.1)

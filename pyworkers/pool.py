@@ -88,6 +88,18 @@ class Pool():
                 worker.terminate()
             raise
 
+    def attach(self, worker):
+        if not isinstance(worker, Worker):
+            raise ValueError('Worker expected')
+
+        if worker.id in self._workers:
+            return
+
+        queue = worker.results_endpoint
+        self._workers[worker.id] = worker
+        self._queues[worker.id] = queue
+        self.handle_new_worker(worker)
+
     def __enter__(self):
         return self
 

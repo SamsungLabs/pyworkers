@@ -131,8 +131,10 @@ class ProcessWorker(Worker):
         self._child = mp.Process(target=self._run, name=self.name)
         self._child.start()
         self._dead = False
-        self._pid, self._tid = self._comms.parent_end.recv()
-        assert self._pid == self._child.pid
+        ready = mp.connection.wait([self._comms.parent_end, self._child.sentinel])
+        if self._comms.parent_end in ready:
+            self._pid, self._tid = self._comms.parent_end.recv()
+            assert self._pid == self._child.pid
 
     # Children-side, main (working) thread
     def _run(self):

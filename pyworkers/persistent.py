@@ -52,3 +52,7 @@ class PersistentWorker(Worker):
 
     def enqueue(self, *args, **kwargs):
         raise NotImplementedError()
+
+    def call(self, *args, **kwargs):
+        self.enqueue(*args, **kwargs)
+        return self.next_result()

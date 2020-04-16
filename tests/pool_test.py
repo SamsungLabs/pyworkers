@@ -152,7 +152,6 @@ class PoolTest(GenericTest):
             self.assertFalse(w.is_alive())
             self.assertTrue(w.has_error)
             self.assertIsNotNone(w.error)
-            print(w.error)
             self.assertIs(type(w.error), WorkerTerminatedError)
 
     def test_surprise_genocide(self):

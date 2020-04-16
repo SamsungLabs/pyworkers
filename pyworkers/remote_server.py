@@ -4,6 +4,7 @@ import signal
 import socket
 import struct
 import logging
+import itertools
 import traceback
 import threading
 import contextlib
@@ -13,6 +14,7 @@ from .remote import send_msg, recv_msg, set_linger, default_port, ConnectionClos
 from .worker import WorkerTerminatedError
 from .process import ProcessWorker
 from .utils import foreign_raise, BraceStyleAdapter, is_windows
+from .remote_pickle import loads
 
 logger = BraceStyleAdapter(logging.getLogger(__name__))
 
@@ -80,6 +82,7 @@ class RemoteServer():
             self.open_socket()
 
         self.children = []
+        self.contexts = {}
         try:
             while True:
                 cli, cli_addr = self.socket.accept()
@@ -87,19 +90,58 @@ class RemoteServer():
 
                 logger.info('New client: {}', cli_addr)
 
-                logger.debug('Waiting for the RemoteWorker object...')
-                try:
-                    child = recv_msg(cli, { '_socket': cli, '_reset_sigterm_hnd': True }, comment='server: initial remote worker')
-                except ConnectionClosedError:
-                    logger.info('Client disconnected before child was successfully created')
+                logger.debug('Waiting for initial context id and worker flag')
+                header = recv_msg(cli, comment='server: header')
+                if header is None:
+                    if self.close_on_none:
+                        logger.info('"None" received')
+                        break
+
                     continue
 
-                if child is None and self.close_on_none:
-                    logger.info('"None" received')
-                    break
+                ctx_id, is_worker = header
+                logger.debug('Received context id: {}, worker flag: {}', ctx_id, is_worker)
 
-                logger.debug('Object received, appending to the list')
-                self.children.append(child)
+                if is_worker:
+                    if ctx_id is not None:
+                        logger.debug('Creating a new worker within context: {}', ctx_id)
+                        ctx = self.contexts.get(ctx_id, None)
+                        if ctx is None:
+                            logger.warning('Context {} does not exist!', ctx_id)
+                            continue
+
+                        ctx.call(cli)
+                    else:
+                        logger.debug('Waiting for the RemoteWorker object...')
+                        try:
+                            child = recv_msg(cli, { '_socket': cli, '_reset_sigterm_hnd': True }, comment='server: remote worker')
+                        except ConnectionClosedError:
+                            logger.info('Client disconnected before child was successfully created')
+                            continue
+
+                        self.children.append(child)
+                else:
+                    result = True
+                    context = recv_msg(cli, comment='server: context')
+                    if context is None:
+                        logger.info('Trying to delete context {}', ctx_id)
+                        current = self.contexts.pop(ctx_id, None)
+                        if current is None:
+                            logger.warning('Context {} does not exist', ctx_id)
+                        else:
+                            if not current.wait(timeout=5):
+                                result = current.terminate(timeout=0.1)
+                            logger.info('Context {} removed', ctx_id)
+                            del current
+                    else:
+                        logger.info('Tryint to register a new context {}', ctx_id)
+                        if ctx_id in self.contexts:
+                            logger.warning('Context {} already exists', ctx_id)
+                            result = False
+                        else:
+                            self.contexts[ctx_id] = context
+
+                    send_msg(cli, result, comment=f'server: context operation - {result}')
         except (WorkerTerminatedError, KeyboardInterrupt):
             pass
         except Exception:
@@ -109,13 +151,16 @@ class RemoteServer():
             logger.info('Closing down...')
             self.socket.close()
             #self.socket.shutdown()
-            for child in self.children:
+            for child in itertools.chain(self.children, self.contexts.values()):
                 try:
                     child.terminate(timeout=1, force=True, _release_remote_ctrl=True)
                     if child.is_alive():
                         os.kill(child.pid, signal.SIGTERM)
                 except:
                     logger.exception('Exception occurred while killing a remote child:')
+
+            self.children.clear()
+            self.contexts.clear()
 
         logger.info('Remote server closed')
         self.closed = True

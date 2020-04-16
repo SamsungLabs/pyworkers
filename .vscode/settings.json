@@ -32,6 +32,7 @@
         "getpid",
         "hexsha",
         "inplace",
+        "itertools",
         "math",
         "newobj",
         "nowait",
