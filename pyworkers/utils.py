@@ -151,7 +151,7 @@ class PipeEndpoint():
             try:
                 if not self._pipe.poll():
                     raise queue.Empty
-            except BrokenPipeError:
+            except (BrokenPipeError, OSError):
                 raise queue.Empty
 
         try:

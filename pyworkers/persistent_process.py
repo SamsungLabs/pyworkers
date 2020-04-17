@@ -11,6 +11,7 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
     def __init__(self, target, results_pipe=None, **kwargs):
         results_pipe = results_pipe or Pipe()
         self._args_pipe = Pipe()
+        self._cleaned_up = False
         super().__init__(target,  results_pipe, **kwargs)
         self._results_pipe.child_end.close()
         self._args_pipe.child_end.close()
@@ -82,10 +83,22 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
                 self._results_pipe.child_end.put((counter, True, result, self.id))
         finally:
             self._results_pipe.child_end.put((counter, False, None, self.id))
-            self._results_pipe.child_end.close()
-            self._args_pipe.child_end.close()
 
         return counter
+
+    def _cleanup(self):
+        if self._cleaned_up:
+            return
+
+        self._results_pipe.child_end.close()
+        self._args_pipe.child_end.close()
+        self._cleaned_up = True
+
+    def __getstate__(self, remote=False):
+        return copy.copy(self.__dict__)
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
     # Parent side
     def _release_child(self):

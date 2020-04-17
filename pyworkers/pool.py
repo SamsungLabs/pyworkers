@@ -1,3 +1,4 @@
+import time
 import queue
 import logging
 import multiprocessing as mp
@@ -186,35 +187,48 @@ class Pool():
                     return None
 
             def enqueue(worker):
+                trials = 0
                 inp = next_inputs(worker)
-                if not self._depleted:
-                    if worker.id in self._closed:
-                        logger.warning('Requested to enqueue new data to {} but the worker is closed - enqueue will be ignored', worker)
-                        return
-                    if worker.id in self._finished:
-                        logger.warning('Requested to enqueue new data to {} but the worker has already finished running - enqueue will be ignored', worker)
-                        return
+                while True:
+                    trials += 1
+                    if not self._depleted:
+                        if worker.id in self._closed:
+                            logger.warning('Requested to enqueue new data to {} but the worker is closed - enqueue will be ignored', worker)
+                            return False, False
+                        if worker.id in self._finished:
+                            logger.warning('Requested to enqueue new data to {} but the worker has already finished running - enqueue will be ignored', worker)
+                            return False, False
 
-                    logger.debug('Enqueuing new data to {}', worker)
-                    if enqueue_callback:
-                        if not enqueue_callback(worker, *inp):
-                            logger.debug('Enqueue callback returned False, closing worker {}', worker)
-                            self._closed.add(worker.id)
-                            return False
+                        logger.debug('Enqueuing new data to {}', worker)
+                        try:
+                            if enqueue_callback:
+                                if not enqueue_callback(worker, *inp):
+                                    logger.debug('Enqueue callback returned False, closing worker {}', worker)
+                                    self._closed.add(worker.id)
+                                    return False, True
+                            else:
+                                worker.enqueue(*inp)
+                        except:
+                            time.sleep(0.3)
+                            if not worker.is_alive():
+                                self._pending -= self._pending_per_worker[worker.id]
+                                logger.warning('{} died while enqueueing', worker)
+                                self._finished.add(worker.id)
+                                return False, False
+                            else:
+                                logger.debug('Enqueueing failed for current input and worker {} but the worker is still alive - will try next input', worker)
+                                continue
+
+                        self._pending += 1
+                        self._pending_per_worker[worker.id] += 1
+                        logger.debug('Current pending results: {}, for {} only: {}', self._pending, worker, self._pending_per_worker[worker.id])
+                        return True, True
                     else:
-                        worker.enqueue(*inp)
+                        logger.debug('Input depleted - closing {}', worker)
+                        #worker.close()
+                        self._closed.add(worker.id)
+                        return False, True
 
-                    self._pending += 1
-                    self._pending_per_worker[worker.id] += 1
-                    logger.debug('Current pending results: {}, for {} only: {}', self._pending, worker, self._pending_per_worker[worker.id])
-                    return True
-                else:
-                    logger.debug('Input depleted - closing {}', worker)
-                    #worker.close()
-                    self._closed.add(worker.id)
-                    return False
-
-            
             for _ in range(worker_extra_pending_inputs + 1):
                 for worker in self._workers.values():
                     enqueue(worker)
@@ -245,7 +259,6 @@ class Pool():
                         logger.debug('Closing and forgetting output queue {}', self._queues[wid])
                         self._queues[wid].close()
                         del self._queues[wid]
-                            
                     if msg is None:
                         logger.warning('Received None message - finishing the loop with {} pending executions and {} workers running', self._pending, len(set(self._workers.keys()).difference(self._finished)))
                         break
@@ -256,7 +269,7 @@ class Pool():
                     if not flag:
                         logger.warning('{} has died', worker)
                         self._pending -= self._pending_per_worker[wid]
-                        self._pending_per_worker[wid]
+                        # self._pending_per_worker[wid]
                         logger.debug('Marking {} as finished', worker)
                         self._finished.add(worker.id)
                     else:
@@ -270,7 +283,8 @@ class Pool():
                             ret.append(result)
                         if worker.id not in self._closed:
                             logger.debug('Trying to enqueue new data for {}', worker)
-                            if not enqueue(worker) and not self._pending_per_worker[wid]:
+                            more, alive = enqueue(worker)
+                            if not more and alive and not self._pending_per_worker[wid]:
                                 logger.debug('No more work to be done for {} - marking as finished', worker)
                                 self._finished.add(worker.id)
         finally:

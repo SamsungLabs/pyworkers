@@ -557,6 +557,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 self._ctrl_comms.parent_end.send(None)
                 self._ctrl_thread_loc.join()
         finally:
+            self._cleanup()
             logger.info('Sending result')
             send_msg(self._socket, result, 'data: result')
             logger.debug('Closing down backend-side socket')
@@ -566,6 +567,9 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 self._aux_socket_my.close()
 
         logger.info('Backend finished')
+
+    def _cleanup(self):
+        pass
 
     # Remote-side, child process' control thread to communicate with the server process (local communication)
     def _ctrl_fn_local(self):

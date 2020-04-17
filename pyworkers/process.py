@@ -162,10 +162,14 @@ class ProcessWorker(Worker):
             logger.exception('Exception occurred while running the main function')
             self._comms.child_end.put((False, e))
         finally:
+            self._cleanup()
             if self._ctrl_thread.is_alive() and not self._terminate_req:
                 self._ctrl_comms.parent_end.send(None)
                 self._ctrl_thread.join()
             self._comms.child_end.close()
+
+    def _cleanup(self):
+        pass
 
     # Children-side, control thread
     def _ctrl_fn(self):

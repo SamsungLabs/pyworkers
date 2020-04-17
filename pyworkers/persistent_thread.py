@@ -1,16 +1,20 @@
 from .thread import ThreadWorker
 from .persistent import PersistentWorker
-from .utils import LocalPipe
+from .utils import LocalPipe, BraceStyleAdapter
 
 import copy
 import queue
+import logging
 import threading
+
+logger = BraceStyleAdapter(logging.getLogger(__name__))
 
 
 class PersistentThreadWorker(PersistentWorker, ThreadWorker):
     def __init__(self, target, results_pipe=None, **kwargs):
         results_pipe = results_pipe or LocalPipe()
         self._args_pipe = LocalPipe()
+        self._cleaned_up = False
         super().__init__(target, results_pipe, **kwargs)
 
     #
@@ -74,11 +78,18 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
                 self._results_pipe.child_end.put((counter, True, result, self.id))
         finally:
             self._results_pipe.child_end.put((counter, False, None, self.id))
-            #if hasattr(self._results_queue, 'close'):
-            #    self._results_queue.close()
-            #    self._results_queue.join_thread()
 
         return counter
+
+    def _cleanup(self):
+        if self._cleaned_up:
+            return
+
+        if hasattr(self._results_pipe.child_end, 'close'):
+            logger.debug('Closing child\'s pipe end')
+            self._results_pipe.child_end.close()
+
+        self._cleaned_up = True
 
     # Parent side
     def _release_child(self):

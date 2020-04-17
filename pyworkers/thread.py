@@ -118,3 +118,8 @@ class ThreadWorker(Worker):
         except BaseException as e:
             logger.exception('Exception occurred while running the main function')
             self._result = (False, e)
+        finally:
+            self._cleanup()
+
+    def _cleanup(self):
+        pass
