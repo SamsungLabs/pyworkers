@@ -56,3 +56,6 @@ class PersistentWorker(Worker):
     def call(self, *args, **kwargs):
         self.enqueue(*args, **kwargs)
         return self.next_result()
+
+    def __call__(self, *args, **kwargs):
+        return self.call(*args, **kwargs)
