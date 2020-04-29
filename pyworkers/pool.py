@@ -53,7 +53,7 @@ class Pool():
     def workers(self):
         return self._get_all_workers()
 
-    def add_worker(self, worker_type, name=None, userid=None, **worker_kwargs):
+    def add_worker(self, worker_type, name=None, userid=None, target=None, args=None, kwargs=None, **worker_kwargs):
         worker = None
         if name is None:
             name = '{} worker {}'.format(self._name, len(self._workers))
@@ -64,9 +64,9 @@ class Pool():
             queue = Pipe()
             worker_kwargs = {
                 **worker_kwargs,
-                'target': self._target,
-                'args': self._args,
-                'kwargs': self._kwargs,
+                'target': target or self._target,
+                'args': args or self._args,
+                'kwargs': kwargs or self._kwargs,
                 'name': name,
                 'userid': userid,
                 'results_pipe': queue
