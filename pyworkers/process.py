@@ -128,7 +128,7 @@ class ProcessWorker(Worker):
 
     # Parent-side
     def _start(self):
-        self._child = mp.Process(target=self._run, name=self.name)
+        self._child = mp.get_context('spawn').Process(target=self._run, name=self.name)
         self._child.start()
         self._dead = False
         ready = mp.connection.wait([self._comms.parent_end, self._child.sentinel])

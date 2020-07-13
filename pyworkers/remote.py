@@ -449,7 +449,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._comms = Pipe()
             self._ctrl_comms = Pipe()
             # we need to be careful not to send a control socket here (see __getstate__)
-            self._child = mp.Process(target=self._run_backend, name=f'{self.name} remote backend')
+            self._child = mp.get_context('spawn').Process(target=self._run_backend, name=f'{self.name} remote backend')
             self._child.start()
             self._dead = False
 
