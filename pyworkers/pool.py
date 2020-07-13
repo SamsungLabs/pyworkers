@@ -82,8 +82,8 @@ class Pool():
 
             self._workers[worker.id] = worker
             self._queues[worker.id] = queue.parent_end
-            worker = None
             self.handle_new_worker(worker)
+            worker = None
         except:
             if worker: # hasn't been added to the pool yet, clean it up
                 worker.terminate()
@@ -287,6 +287,8 @@ class Pool():
                             if not more and alive and not self._pending_per_worker[wid]:
                                 logger.debug('No more work to be done for {} - marking as finished', worker)
                                 self._finished.add(worker.id)
+
+            logger.debug('All workers has finished and/or died, Pool.run is finishing...')
         finally:
             self._map_guard = False
 
