@@ -231,7 +231,7 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port, command):
     else:
         server_cmd = command
 
-    server_cmd += '-vv --addr {}'.format(host)
+    server_cmd += ' -vv --addr {}'.format(host)
     if server_port:
         server_cmd += ' --port {}'.format(server_port)
 
