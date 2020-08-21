@@ -216,7 +216,7 @@ def run_server(addr, install_handlers=True, close_on_none=True):
         server.run()
 
 
-def _spawn_ssh_server(host, user, passwd, wdir, server_port):
+def _spawn_ssh_server(host, user, passwd, wdir, server_port, command):
     full_host = host
     if user:
         full_user = user
@@ -226,7 +226,12 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port):
         full_host = '{}@{}'.format(full_user, host)
 
     host = socket.gethostbyname(host)
-    server_cmd = 'python3 -m pyworkers.remote_server -vv --addr {} --close_on_none --suppress_children'.format(host)
+    if not command:
+        server_cmd = 'python3 -m pyworkers.remote_server -vv --close_on_none --suppress_children'
+    else:
+        server_cmd = command
+
+    server_cmd += ' --addr {}'.format(host)
     if server_port:
         server_cmd += ' --port {}'.format(server_port)
 
@@ -240,7 +245,7 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port):
 
 
 @contextlib.contextmanager
-def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None):
+def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, command=None):
     ''' Returns a context manager which returns a remote server on the specified host
         by ssh-ing into it. The server is killed when the calling threads exists the manager.
 
@@ -259,6 +264,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None):
             wdir : an optional working directory from which the remote server will be called, if not provided
                 the server will be spawned from the default directory to which the user is moved when ssh-ing
             server_port : optional port number on which the server should be listening
+            command : optionally specifies what command to run, instead of calling pyworkers.remote_server directly
 
         Returns:
             A context manager which creates a server on enter and closes it on exit.
@@ -335,7 +341,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None):
             return getattr(self.proc, name)
 
     _stdout_buff = bytearray()
-    ssh_proc = _spawn_ssh_server(host, user, passwd, wdir, server_port)
+    ssh_proc = _spawn_ssh_server(host, user, passwd, wdir, server_port, command)
     ssh_proc = ssh_popen(ssh_proc, _stdout_buff)
 
     try:
