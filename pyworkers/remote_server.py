@@ -227,11 +227,11 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port, command):
 
     host = socket.gethostbyname(host)
     if not command:
-        server_cmd = 'python3 -m pyworkers.remote_server -vv --close_on_none --suppress_children'
+        server_cmd = 'python3 -m pyworkers.remote_server --close_on_none --suppress_children'
     else:
         server_cmd = command
 
-    server_cmd += ' --addr {}'.format(host)
+    server_cmd += '-vv --addr {}'.format(host)
     if server_port:
         server_cmd += ' --port {}'.format(server_port)
 
