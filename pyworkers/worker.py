@@ -23,7 +23,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     _active_children = []
     _children_lock = threading.Lock()
 
-    def __init__(self, target, *, args=None, kwargs=None, name=None, userid=None, run=None):
+    def __init__(self, target, *, host=None, args=None, kwargs=None, name=None, userid=None, run=None):
         ''' Constructor of the base :py:class:`Worker` class. Should be called by derived classes.
 
             Each worker can either be run, or assumed dead immediately up-front, in which
