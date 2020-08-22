@@ -3,12 +3,12 @@ from .worker import Worker, WorkerType, WorkerTerminatedError
 import os
 import sys
 import queue
+import runpy
+import types
 import struct
 import socket
 import signal
 import logging
-import importlib
-import traceback
 import threading
 import collections
 import multiprocessing as mp
@@ -92,7 +92,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     def __init__(self, *args, host=None, context=None, main_path=None, **kwargs):
         self._target_host = sanitize_target_host(host)
         if main_path is None:
-            main_path = sys.modules['__main__'].__file__
+            main_path = os.path.abspath(sys.modules['__main__'].__file__)
 
         self._startup_sync = threading.Event()
         self._remote_side = False # tells us whether the class exists on the remote end
@@ -448,6 +448,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             logger.debug('Spinning up a backend child process...')
             self._comms = Pipe()
             self._ctrl_comms = Pipe()
+
             # we need to be careful not to send a control socket here (see __getstate__)
             self._child = mp.get_context('spawn').Process(target=self._run_backend, name=f'{self.name} remote backend')
             self._child.start()
@@ -513,11 +514,15 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             if self._main_path:
                 logger.debug('Trying to update __main__')
                 try:
-                    new_main_spec = importlib.util.spec_from_file_location('__new_main__', self._main_path)
-                    new_main = importlib.util.module_from_spec(new_main_spec)
-                    new_main_spec.loader.exec_module(new_main)
-                    sys.modules['__main__'] = new_main
+                    # This follows how __mp_main__ is called in multiprocessing with "spawn"
+                    # see _fixup_main_from_path in cpython's spawn.py
+                    main_module = types.ModuleType("__new_main__")
+                    main_content = runpy.run_path(self._main_path,
+                                                    run_name="__new_main__")
+                    main_module.__dict__.update(main_content)
+                    sys.modules['__main__'] = sys.modules['__new_main__'] = main_module
                 except:
+                    logger.debug('Error occurred while trying to setup new main', exc_info=1)
                     pass
 
             if not hasattr(self, '_target'):
