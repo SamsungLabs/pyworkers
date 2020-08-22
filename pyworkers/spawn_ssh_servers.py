@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--command', default=None, type=str, help='Command to run on each host')
     parser.add_argument('--wdir', default=None, type=str, help='Working directory of the servers')
     parser.add_argument('--forward_stdout', action='store_true', help='Print stdout of the server to this process stdout')
+    parser.add_argument('--signal', type=str, help='An "OK" signal will be written to this file in order to communicate that all server have been created. If an error occurs, "ERR" will be written".')
     args = parser.parse_args()
 
     stack = contextlib.ExitStack()
@@ -27,13 +28,23 @@ def main():
     signal.signal(signal.SIGINT, trap)
     servers = []
     with stack:
-        for addr in args.addrs:
-            print(f'Creating an ssh server at: {addr}')
-            # TODO: suppress_children is actually a very misleading name... in fact, when set to True the child processes
-            # won't inherit the verbosity level of the main server process, but later they can be easily configured on their
-            # own and be as verbose as possible...
-            server = stack.enter_context(tmp_ssh_server(host=addr, wdir=args.wdir, command=args.command, suppress_children=True))
-            servers.append(server)
+        try:
+            for addr in args.addrs:
+                print(f'Creating an ssh server at: {addr}')
+                # TODO: suppress_children is actually a very misleading name... in fact, when set to True the child processes
+                # won't inherit the verbosity level of the main server process, but later they can be easily configured on their
+                # own and be as verbose as possible...
+                server = stack.enter_context(tmp_ssh_server(host=addr, wdir=args.wdir, command=args.command, suppress_children=True))
+                servers.append(server)
+        except:
+            if args.signal:
+                with open(args.signal, 'w') as f:
+                    f.write("ERR")
+            raise
+
+        if args.signal:
+            with open(args.signal, 'w') as f:
+                f.write('OK')
 
         while _run:
             if args.forward_stdout:
