@@ -81,8 +81,6 @@ import pickle
 def remote_dump(obj, file, protocol=None, remote=True, **kwargs):
     p = RemotePickler(file, protocol, remote=remote, **kwargs)
     p.dump(obj)
-    import pickle
-    pickle.dump()
 
 
 def remote_dumps(obj, protocol=None, remote=True, **kwargs):
