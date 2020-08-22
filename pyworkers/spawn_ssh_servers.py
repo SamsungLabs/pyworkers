@@ -11,6 +11,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('addrs', nargs='+')
     parser.add_argument('--command', default=None, type=str, help='Command to run on each host')
+    parser.add_argument('--wdir', default=None, type=str, help='Working directory of the servers')
     args = parser.parse_args()
 
     stack = contextlib.ExitStack()
@@ -26,7 +27,7 @@ def main():
     with stack:
         for addr in args.addrs:
             print(f'Creating an ssh server at: {addr}')
-            stack.enter_context(tmp_ssh_server(host=addr, command=args.command))
+            stack.enter_context(tmp_ssh_server(host=addr, wdir=args.wdir, command=args.command))
 
         while _run:
             time.sleep(1)
