@@ -105,6 +105,8 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                 self._result = result
                 break
 
+        self._results_pipe.child_end.close()
+
     # Do not transfer results queue over network
     def __getstate__(self, remote=False):
         state = super().__getstate__(remote=remote)
