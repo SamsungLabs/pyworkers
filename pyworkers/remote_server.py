@@ -216,7 +216,7 @@ def run_server(addr, install_handlers=True, close_on_none=True):
         server.run()
 
 
-def _spawn_ssh_server(host, user, passwd, wdir, server_port, command):
+def _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_children):
     full_host = host
     if user:
         full_user = user
@@ -227,11 +227,13 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port, command):
 
     host = socket.gethostbyname(host)
     if not command:
-        server_cmd = 'python3 -m pyworkers.remote_server --close_on_none --suppress_children'
+        server_cmd = 'python3 -m pyworkers.remote_server'
     else:
         server_cmd = command
 
-    server_cmd += ' -vv --addr {}'.format(host)
+    server_cmd += ' --close_on_none -vv --addr {}'.format(host)
+    if suppress_children:
+        server_cmd += ' --suppress_children'
     if server_port:
         server_cmd += ' --port {}'.format(server_port)
 
@@ -245,7 +247,7 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port, command):
 
 
 @contextlib.contextmanager
-def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, command=None):
+def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, command=None, suppress_children=True):
     ''' Returns a context manager which returns a remote server on the specified host
         by ssh-ing into it. The server is killed when the calling threads exists the manager.
 
@@ -341,7 +343,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
             return getattr(self.proc, name)
 
     _stdout_buff = bytearray()
-    ssh_proc = _spawn_ssh_server(host, user, passwd, wdir, server_port, command)
+    ssh_proc = _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_children)
     ssh_proc = ssh_popen(ssh_proc, _stdout_buff)
 
     try:
@@ -356,6 +358,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
         if not server_running:
             raise RuntimeError('Could not create a server process:\n' + ssh_proc.stdout)
 
+        ssh_proc._start_fetcher()
         yield ssh_proc
         try:
             ssh_proc.wait(timeout=5)
