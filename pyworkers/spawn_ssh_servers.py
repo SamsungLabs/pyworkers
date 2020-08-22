@@ -37,12 +37,18 @@ def main():
                 server = stack.enter_context(tmp_ssh_server(host=addr, wdir=args.wdir, command=args.command, suppress_children=True))
                 servers.append(server)
         except:
+            print("Error occurred while creating server...")
+            import traceback
+            traceback.print_exc()
             if args.signal:
+                print("Signalling to file:", args.signal)
                 with open(args.signal, 'w') as f:
                     f.write("ERR")
-            raise
+            sys.exit(1)
 
+        print("Servers up and running...")
         if args.signal:
+            print("Signalling to file:", args.signal)
             with open(args.signal, 'w') as f:
                 f.write('OK')
 
