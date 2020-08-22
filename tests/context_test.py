@@ -29,7 +29,7 @@ class PersistentContextTest(GenericTest):
         super().__init__(target_cls, *args, **kwargs)
 
     def test_good(self):
-        self.context = RemoteContext(1, target=test_fun, kwargs={ 'exp': 3 })
+        self.context = RemoteContext(1, target=test_fun, host=('127.0.0.1', 61006), kwargs={ 'exp': 3 })
         self.worker = PersistentRemoteWorker(None, host=self.context.host, context=self.context.context_id)
         self.assertTrue(self.worker.is_alive())
 
@@ -54,7 +54,7 @@ class PersistentContextTest(GenericTest):
                 self.assertEqual(x**3, y)
 
     def test_terminate_context(self):
-        self.context = RemoteContext(1, target=long_test_fun, kwargs={ 'exp': 3 })
+        self.context = RemoteContext(1, target=long_test_fun, host=('127.0.0.1', 61006), kwargs={ 'exp': 3 })
         self.worker = PersistentRemoteWorker(None, host=self.context.host, context=self.context.context_id)
         self.assertTrue(self.worker.is_alive())
 
@@ -77,7 +77,7 @@ class PersistentContextTest(GenericTest):
                     break
 
     def test_terminate_empty_context(self):
-        self.context = RemoteContext(1, target=long_test_fun, kwargs={ 'exp': 3 })
+        self.context = RemoteContext(1, target=long_test_fun, host=('127.0.0.1', 61006), kwargs={ 'exp': 3 })
         self.assertTrue(self.context.is_alive())
         self.assertTrue(self.context.wait())
         self.assertFalse(self.context.is_alive())
