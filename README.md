@@ -1,4 +1,7 @@
 # pyworkers
+
+[![CircleCI](https://circleci.sec.samsung.net/gh/SAIC-Cambridge/pyworkers.svg?style=svg)](https://circleci.sec.samsung.net/gh/SAIC-Cambridge/pyworkers)
+
 PyWorkers is a (relatively) small library wrapping and extending standard `threading` and `multiprocessing` libraries to provide things such as:
  - uniform API,
  - support for both graceful and forceful termination,
