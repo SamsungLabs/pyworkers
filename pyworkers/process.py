@@ -156,6 +156,7 @@ class ProcessWorker(Worker):
         try:
             #assert self.is_child
             self._comms.child_end.put((self._pid, self._tid))
+            self._init_child()
             result = self.do_work()
             self._comms.child_end.put((True, result))
         except Exception as e:
@@ -167,6 +168,9 @@ class ProcessWorker(Worker):
                 self._ctrl_comms.parent_end.send(None)
                 self._ctrl_thread.join()
             self._comms.child_end.close()
+
+    def _init_child(self):
+        pass
 
     def _cleanup(self):
         pass

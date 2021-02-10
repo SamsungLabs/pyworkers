@@ -7,7 +7,11 @@ import signal
 from .test_utils import GenericTest, make_test
 
 from pyworkers.pool import Pool
+from pyworkers.persistent import PersistentWorker
 from pyworkers.worker import WorkerType, WorkerTerminatedError
+from pyworkers.persistent_thread import PersistentThreadWorker
+from pyworkers.persistent_process import PersistentProcessWorker
+from pyworkers.persistent_remote import PersistentRemoteWorker
 
 
 class SuicideError(Exception):
@@ -27,6 +31,42 @@ def midlife_crisis_suicide_fn(x):
         raise SuicideError()
     else:
         return x**2
+
+
+# This class implements standard persistent behaviour,
+# however if a SuicideError happens when evaluating the target function
+# it ignores it and continues its work
+# it is used to test the case when a custom persistant class
+# handles exceptions raised in do_work - if it does, the class
+# should work fine
+class ResilientPersistent(PersistentWorker):
+    def __init__(self, target, *args, host=None, **kwargs):
+        self._raise = True
+        if type(self).is_remote:
+            super().__init__(target, *args, host=host, **kwargs)
+        else:
+            super().__init__(target, *args, **kwargs)
+
+
+    def do_work(self):
+        while True:
+            try:
+                return super().do_work()
+            except SuicideError as e:
+                self._send_result(e)
+
+
+class ResilientPersistent_Thread(ResilientPersistent, PersistentThreadWorker):
+    pass
+
+class ResilientPersistent_Process(ResilientPersistent, PersistentProcessWorker):
+    pass
+
+class ResilientPersistent_Remote(ResilientPersistent, PersistentRemoteWorker):
+    pass
+
+
+
 
 
 class PoolTest(GenericTest):
@@ -132,6 +172,41 @@ class PoolTest(GenericTest):
             check.add(x)
 
         self.assertEqual(list(sorted(check)), list(range(5)))
+
+    def test_midlife_crisis_suicide_resilient(self):
+        worker_cls = None
+        if self.target_cls == WorkerType.THREAD:
+            worker_cls = ResilientPersistent_Thread
+        elif self.target_cls == WorkerType.PROCESS:
+            worker_cls = ResilientPersistent_Process
+        elif self.target_cls == WorkerType.REMOTE:
+            worker_cls = ResilientPersistent_Remote
+
+        p = Pool(midlife_crisis_suicide_fn, name='Test Pool')
+        with p:
+            p.add_worker(worker_cls, host=('127.0.0.1', 61006), name=f'Worker_0', userid=0)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            results = p.run(iter([1, 2, 3, 4, 5, 1, 2, 3, 4, 5]))
+
+        self.assertEqual(len(p.workers), 1)
+        for w in p.workers:
+            self.assertFalse(w.is_alive())
+            self.assertFalse(w.has_error)
+
+        check = []
+        errors = 0
+        for r in results:
+            if isinstance(r, SuicideError):
+                errors += 1
+                continue
+            x = int(math.sqrt(r))
+            check.append(x)
+
+        self.assertEqual(errors, 2)
+        self.assertEqual(list(sorted(check)), [1, 1, 2, 2, 3, 3, 4, 4])
 
     def test_genocide(self):
         p = Pool(test_fn, name='Test Pool')

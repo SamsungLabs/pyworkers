@@ -540,6 +540,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 unused_sync = self._comms.child_end.recv()
                 self._comms.child_end.close()
 
+                self._init_child()
+
                 logger.info('Running the main function')
                 result = self.do_work()
                 result = (True, result)
@@ -572,6 +574,9 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 self._aux_socket_my.close()
 
         logger.info('Backend finished')
+
+    def _init_child(self):
+        pass
 
     def _cleanup(self):
         pass

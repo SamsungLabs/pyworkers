@@ -60,36 +60,38 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
 
     # Child side
     def do_work(self):
-        counter = 0
-        self._stop = False
+        while not self._stop:
+            args = copy.deepcopy(self._args)
+            kwargs = copy.deepcopy(self._kwargs)
+            try:
+                mp.connection.wait([self._args_pipe.child_end])
+                extra = self._args_pipe.child_end.recv()
+            except EOFError:
+                break
+            if extra is None:
+                break
+            extra_args, extra_kwargs = extra
+            args[0:len(extra_args)] = extra_args
+            kwargs.update(extra_kwargs)
+            result = self.run(*args, **kwargs)
+            self._send_result(result)
+
+        return self._counter
+
+    def _init_child(self):
+        super()._init_child()
         self._results_pipe.parent_end.close()
         self._args_pipe.parent_end.close()
-        try:
-            while not self._stop:
-                args = copy.deepcopy(self._args)
-                kwargs = copy.deepcopy(self._kwargs)
-                try:
-                    mp.connection.wait([self._args_pipe.child_end])
-                    extra = self._args_pipe.child_end.recv()
-                except EOFError:
-                    break
-                if extra is None:
-                    break
-                extra_args, extra_kwargs = extra
-                args[0:len(extra_args)] = extra_args
-                kwargs.update(extra_kwargs)
-                result = self.run(*args, **kwargs)
-                counter += 1
-                self._results_pipe.child_end.put((counter, True, result, self.id))
-        finally:
-            self._results_pipe.child_end.put((counter, False, None, self.id))
 
-        return counter
+    def _send_result(self, result):
+        self._counter += 1
+        self._results_pipe.child_end.put((self._counter, True, result, self.id))
 
     def _cleanup(self):
         if self._cleaned_up:
             return
 
+        self._results_pipe.child_end.put((self._counter, False, None, self.id))
         self._results_pipe.child_end.close()
         self._args_pipe.child_end.close()
         self._cleaned_up = True

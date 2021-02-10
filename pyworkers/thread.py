@@ -114,6 +114,7 @@ class ThreadWorker(Worker):
         self._startup_sync.set()
         try:
             assert self.is_child
+            self._init_child()
             self._result = (True, self.do_work())
         except BaseException as e:
             logger.exception('Exception occurred while running the main function')
@@ -122,4 +123,7 @@ class ThreadWorker(Worker):
             self._cleanup()
 
     def _cleanup(self):
+        pass
+
+    def _init_child(self):
         pass

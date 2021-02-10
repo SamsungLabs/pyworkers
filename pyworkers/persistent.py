@@ -59,3 +59,7 @@ class PersistentWorker(Worker):
 
     def __call__(self, *args, **kwargs):
         return self.call(*args, **kwargs)
+
+    def _init_child(self):
+        self._counter = 0
+        self._stop = False

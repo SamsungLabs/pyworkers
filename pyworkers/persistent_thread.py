@@ -61,30 +61,29 @@ class PersistentThreadWorker(PersistentWorker, ThreadWorker):
 
     # Child side
     def do_work(self):
-        counter = 0
-        self._stop = False
-        try:
-            while not self._stop:
-                args = copy.deepcopy(self._args)
-                kwargs = copy.deepcopy(self._kwargs)
-                extra = self._args_pipe.child_end.get()
-                if extra is None:
-                    break
-                extra_args, extra_kwargs = extra
-                args[0:len(extra_args)] = extra_args
-                kwargs.update(extra_kwargs)
-                result = self.run(*args, **kwargs)
-                counter += 1
-                self._results_pipe.child_end.put((counter, True, result, self.id))
-        finally:
-            self._results_pipe.child_end.put((counter, False, None, self.id))
+        while not self._stop:
+            args = copy.deepcopy(self._args)
+            kwargs = copy.deepcopy(self._kwargs)
+            extra = self._args_pipe.child_end.get()
+            if extra is None:
+                break
+            extra_args, extra_kwargs = extra
+            args[0:len(extra_args)] = extra_args
+            kwargs.update(extra_kwargs)
+            result = self.run(*args, **kwargs)
+            self._send_result(result)
 
-        return counter
+        return self._counter
+
+    def _send_result(self, result):
+        self._counter += 1
+        self._results_pipe.child_end.put((self._counter, True, result, self.id))
 
     def _cleanup(self):
         if self._cleaned_up:
             return
 
+        self._results_pipe.child_end.put((self._counter, False, None, self.id))
         if hasattr(self._results_pipe.child_end, 'close'):
             logger.debug('Closing child\'s pipe end')
             self._results_pipe.child_end.close()
