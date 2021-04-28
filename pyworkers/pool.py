@@ -254,11 +254,15 @@ class Pool():
                         assert found
                         if not found:
                             raise RuntimeError(f'Worker for the queue {conn} could not be found')
-                        msg = (None, False, None, wid)
-                        logger.debug('Artificial closing message from worker {} created', wid)
                         logger.debug('Closing and forgetting output queue {}', self._queues[wid])
                         self._queues[wid].close()
                         del self._queues[wid]
+                        if wid not in self._finished:
+                            msg = (None, False, None, wid)
+                            logger.debug('Artificial closing message from worker {} created', wid)
+                        else:
+                            continue
+
                     if msg is None:
                         logger.warning('Received None message - finishing the loop with {} pending executions and {} workers running', self._pending, len(set(self._workers.keys()).difference(self._finished)))
                         break
