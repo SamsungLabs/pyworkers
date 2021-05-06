@@ -216,7 +216,7 @@ class Pool():
                                 self._finished.add(worker.id)
                                 return False, False
                             else:
-                                logger.debug('Enqueueing failed for current input and worker {} but the worker is still alive - will try next input', worker)
+                                logger.exception('Enqueueing failed for current input and worker {} but the worker is still alive - will try next input', worker)
                                 continue
 
                         self._pending += 1
