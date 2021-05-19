@@ -47,7 +47,7 @@ def recv_msg(sock, state_overwrites=None, comment=None):
     data = bytes()
     try:
         while data_len:
-            chunk = sock.recv(min(4096, data_len))
+            chunk = sock.recv(data_len)
             data_len -= len(chunk)
             data += chunk
     except (ConnectionResetError) as e:
