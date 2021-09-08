@@ -337,12 +337,6 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._socket.connect(self._target_host)
         logger.debug('Data socket at: {}', self._socket.getsockname())
 
-        logger.debug('Creating a frontend control socket')
-        self._ctrl_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._ctrl_sock.bind((self._socket.getsockname()[0], 0))
-        self._ctrl_sock.listen()
-        logger.debug('Control socket listening at {}', self._ctrl_sock.getsockname())
-
         logger.debug('Spinning up a frontend thread')
         self._child = threading.Thread(target=self._run_frontend, name=f'{self.name} remote front')
         self._child.start()
@@ -361,12 +355,13 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         send_msg(self._socket, (self._context, True), comment='data: header')
         send_msg(self._socket, self, comment='data: initial remote worker') # this will spawn a backend at the remote side, via __getstate__(remote=True) and __setstate__
 
-        incoming = self._ctrl_sock
-        logger.debug('Waiting for a connect to the control socket from the backend')
-        self._ctrl_sock, ctrl_peer = incoming.accept()
-        logger.debug('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), ctrl_peer)
-        logger.debug('Closing listening socket')
-        incoming.close()
+        logger.debug('Waiting for control socket address from the child...')
+        control_addr = recv_msg(self._socket, comment='control socket addr')
+
+        logger.debug('Control socket address from the child: {}, connecting...', control_addr)
+        self._ctrl_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._ctrl_sock.connect(control_addr)
+        logger.debug('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), control_addr)
 
         self._host, self._pid, self._tid = recv_msg(self._ctrl_sock, comment='ctrl: runtime info')
         logger.debug('Received info package from the backend, signalling the main thread that everything is fine')
@@ -408,7 +403,6 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             state['_child'] = None
             state['_socket'] = None # _socket will be injected by the server on the remote side
             state['_startup_sync'] = None
-            state['_ctrl_sock'] = self._ctrl_sock.getsockname()
             if self._context is None:
                 state['_payload'] = remote_pickle.dumps((self._target, self._args, self._kwargs))
             del state['_target']
@@ -419,7 +413,6 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             assert self._remote_side
             assert not self._is_backend
             state = self.__dict__.copy()
-            state['_ctrl_sock'] = None
             return state
 
     # Handles deserialization between:
@@ -439,11 +432,21 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._is_backend = False
 
             logger.debug('Client data socket is: {}', self._socket.getpeername())
-            logger.debug('Trying to connect to the control socket in the parent node: {}', self._ctrl_sock)
-            _ctrl_sock_addr = self._ctrl_sock
+            logger.debug('Creating a control socket for this connection...')
             self._ctrl_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._ctrl_sock.connect(_ctrl_sock_addr)
-            logger.debug('Connected successfully at: {}', self._ctrl_sock.getsockname())
+            self._ctrl_sock.bind((self._socket.getsockname()[0], 0))
+            self._ctrl_sock.listen()
+            logger.debug('Control socket listening at {}', self._ctrl_sock.getsockname())
+
+            logger.debug('Notifying the parent about newly created control socket...')
+            send_msg(self._socket, self._ctrl_sock.getsockname(), comment='control socket addr')
+
+            incoming = self._ctrl_sock
+            logger.debug('Waiting for a connect to the control socket from the parent')
+            self._ctrl_sock, ctrl_peer = incoming.accept()
+            logger.debug('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), ctrl_peer)
+            logger.debug('Closing listening socket')
+            incoming.close()
 
             logger.debug('Spinning up a backend child process...')
             self._comms = Pipe()
