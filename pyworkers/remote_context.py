@@ -9,7 +9,7 @@ from .persistent_process import PersistentProcessWorker
 from .persistent_remote import PersistentRemoteWorker
 from .worker import autoclose_active_children, Worker
 from .remote_pickle import loads, dumps, SupportRemoteGetState
-from .remote import sanitize_target_host, send_msg, recv_msg, ConnectionClosedError
+from .remote import sanitize_target_host, send_msg, recv_msg, ConnectionClosedError, set_keepalive
 from .utils import BraceStyleAdapter
 
 logger = BraceStyleAdapter(logging.getLogger(__name__))
@@ -73,6 +73,7 @@ class RemoteContext(SupportRemoteGetState):
     @contextlib.contextmanager
     def _connect(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        set_keepalive(s, True)
         try:
             s.connect(self._target_host)
             yield s

@@ -62,6 +62,11 @@ def set_linger(sock, enable, timeout):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, opt_bytes)
 
 
+def set_keepalive(sock, enable):
+    opt_bytes = struct.pack('h' if is_windows() else 'i', int(enable))
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, opt_bytes)
+
+
 def sanitize_target_host(host):
     if host:
         if isinstance(host, str):
@@ -334,6 +339,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         logger.debug('Connecting to {}', self._target_host)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         set_linger(self._socket, True, 0)
+        set_keepalive(self._socket, True)
         self._socket.connect(self._target_host)
         logger.debug('Data socket at: {}', self._socket.getsockname())
 
@@ -360,6 +366,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
         logger.debug('Control socket address from the child: {}, connecting...', control_addr)
         self._ctrl_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        set_keepalive(self._ctrl_sock, True)
         self._ctrl_sock.connect(control_addr)
         logger.debug('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), control_addr)
 
