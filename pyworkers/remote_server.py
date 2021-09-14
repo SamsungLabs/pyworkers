@@ -10,7 +10,7 @@ import threading
 import contextlib
 import subprocess
 
-from .remote import send_msg, recv_msg, set_linger, default_port, ConnectionClosedError
+from .remote import send_msg, recv_msg, set_keepalive, set_linger, default_port, ConnectionClosedError
 from .worker import WorkerTerminatedError
 from .process import ProcessWorker
 from .utils import foreign_raise, BraceStyleAdapter, is_windows
@@ -87,6 +87,7 @@ class RemoteServer():
             while True:
                 cli, cli_addr = self.socket.accept()
                 set_linger(cli, False, 0)
+                set_keepalive(cli, True)
 
                 logger.info('New client: {}', cli_addr)
 

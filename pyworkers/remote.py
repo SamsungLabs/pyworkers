@@ -451,6 +451,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             incoming = self._ctrl_sock
             logger.debug('Waiting for a connect to the control socket from the parent')
             self._ctrl_sock, ctrl_peer = incoming.accept()
+            set_keepalive(self._ctrl_sock, True)
             logger.debug('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), ctrl_peer)
             logger.debug('Closing listening socket')
             incoming.close()
