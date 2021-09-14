@@ -62,9 +62,15 @@ def set_linger(sock, enable, timeout):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, opt_bytes)
 
 
-def set_keepalive(sock, enable):
+def set_keepalive(sock, enable, time=None, interval=None, probes=None):
     opt_bytes = struct.pack('h' if is_windows() else 'i', int(enable))
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, opt_bytes)
+    if time is not None:
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, struct.pack('h' if is_windows() else 'i', int(time)))
+    if interval is not None:
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, struct.pack('h' if is_windows() else 'i', int(interval)))
+    if probes is not None:
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT, struct.pack('h' if is_windows() else 'i', int(probes)))
 
 
 def sanitize_target_host(host):
@@ -97,7 +103,10 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     def __init__(self, *args, host=None, context=None, main_path=None, **kwargs):
         self._target_host = sanitize_target_host(host)
         if main_path is None:
-            main_path = os.path.abspath(sys.modules['__main__'].__file__)
+            try:
+                main_path = os.path.abspath(sys.modules['__main__'].__file__)
+            except:
+                pass
 
         self._startup_sync = threading.Event()
         self._remote_side = False # tells us whether the class exists on the remote end
