@@ -89,6 +89,8 @@ class Pool():
                 worker.terminate()
             raise
 
+            return worker
+
     def attach(self, worker):
         if not isinstance(worker, Worker):
             raise ValueError('Worker expected')
@@ -161,7 +163,7 @@ class Pool():
         return self._close(timeout, force, False)
 
 
-    def run(self, *input_sources, results_callback=None, enqueue_callback=None, worker_extra_pending_inputs=0, return_results=True):
+    def run(self, *input_sources, results_callback=None, enqueue_callback=None, worker_status_callback=None, worker_extra_pending_inputs=0, return_results=True):
         if self._pool_closed:
             raise RuntimeError('Trying to use a closed Pool')
         if self._map_guard:
@@ -231,7 +233,16 @@ class Pool():
 
             for _ in range(worker_extra_pending_inputs + 1):
                 for worker in self._workers.values():
-                    enqueue(worker)
+                    more, alive = enqueue(worker)
+                    if worker_status_callback:
+                        if not alive:
+                            worker_status_callback(worker, 'died')
+                        else:
+                            if more:
+                                worker_status_callback(worker, 'enqueued')
+                            else:
+                                worker_status_callback(worker, 'finished')
+
                     if self._depleted:
                         break
                 if self._depleted:
@@ -276,6 +287,8 @@ class Pool():
                         # self._pending_per_worker[wid]
                         logger.debug('Marking {} as finished', worker)
                         self._finished.add(worker.id)
+                        if worker_status_callback:
+                            worker_status_callback(worker, 'died')
                     else:
                         assert wid not in self._closed and wid not in self._finished
                         self._pending -= 1
@@ -291,6 +304,15 @@ class Pool():
                             if not more and alive and not self._pending_per_worker[wid]:
                                 logger.debug('No more work to be done for {} - marking as finished', worker)
                                 self._finished.add(worker.id)
+
+                            if worker_status_callback:
+                                if not alive:
+                                    worker_status_callback(worker, 'died')
+                                else:
+                                    if more:
+                                        worker_status_callback(worker, 'enqueued')
+                                    else:
+                                        worker_status_callback(worker, 'finished')
 
             logger.debug('All workers has finished and/or died, Pool.run is finishing...')
         finally:
