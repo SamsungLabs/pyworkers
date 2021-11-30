@@ -83,13 +83,12 @@ class Pool():
             self._workers[worker.id] = worker
             self._queues[worker.id] = queue.parent_end
             self.handle_new_worker(worker)
-            worker = None
         except:
             if worker: # hasn't been added to the pool yet, clean it up
                 worker.terminate()
             raise
 
-            return worker
+        return worker
 
     def attach(self, worker):
         if not isinstance(worker, Worker):
