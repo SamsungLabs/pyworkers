@@ -12,7 +12,7 @@ logger = BraceStyleAdapter(logging.getLogger(__name__))
 
 
 class Pool():
-    def __init__(self, target, results_queue=None, args=None, kwargs=None, close_timeout=5, force_terminate=None, name=None):
+    def __init__(self, target, results_queue=None, args=None, kwargs=None, retry=True, close_timeout=5, force_terminate=None, name=None):
         if close_timeout is not None and close_timeout < 0:
             raise ValueError('Negative timeout')
         self._target = target
@@ -30,6 +30,8 @@ class Pool():
         self._depleted = False
         self._closed = set()
         self._pending_per_worker = {}
+        self._retry = retry
+        self._retries = []
 
     @property
     def timeout(self):
@@ -173,81 +175,140 @@ class Pool():
             self._depleted = False
             self._pending = 0
             self._closed = set()
-            self._finished = set()
-            self._pending_per_worker = { worker.id: 0 for worker in self.workers }
+            self._pending_per_worker = { worker.id: [] for worker in self.workers }
+            self._retries = []
             ret = []
 
             def next_inputs(worker):
-                if self._depleted:
-                    return None
-                try:
-                    return tuple([source(worker) if callable(source) else next(source) for source in input_sources])
-                except StopIteration:
-                    logger.debug('At least one input sequence has been depleted - no more data will be enqueued to any worker')
-                    self._depleted = True
-                    return None
+                ''' Return (new_data, from_retires, data)
+                    if ``new_data`` is False, then ``data`` is ``None``
+                    ``from_retries`` is ``True`` only if ``new_data`` is also ``True``
+                    and its value comes from retrying mechanism
+                '''
+                if self._retries:
+                    logger.debug('Retrying input that previous failed')
+                    return True, True, self._retries.pop(0)
 
-            def enqueue(worker):
+                if self._depleted:
+                    return False, False, None
+
+                try:
+                    return True, False, tuple([source(worker) if callable(source) else next(source) for source in input_sources])
+                except StopIteration:
+                    logger.debug('At least one input sequence has been depleted - no extra data will be enqueued to any worker (re-enqueues can happen)')
+                    self._depleted = True
+                    return False, False, None
+
+            def get_next_idle_worker():
+                maybe_idle = set(wid for wid, workload in self._pending_per_worker.items() if not workload)
+                idle = maybe_idle.difference(self._closed)
+                if not idle:
+                    return None
+                return self._workers[next(iter(idle))]
+
+            def handle_death(worker, when=None):
+                if when:
+                    logger.warning('{} died {}', worker, when)
+                else:
+                    logger.warning('{} died', worker)
+
+                if self._retry:
+                    self._retries.extend(self._pending_per_worker[worker.id])
+
+                self._pending -= len(self._pending_per_worker[worker.id])
+                self._pending_per_worker[worker.id].clear()
+                self._closed.add(worker.id)
+                if worker_status_callback:
+                    worker_status_callback(worker, 'died')
+
+                while self._retries:
+                    idle = get_next_idle_worker()
+                    if idle is None:
+                        break
+
+                    logger.debug('Found an idle worker: {}, trying to enqueue workload from previous failures worker to it', idle)
+                    try_enqueue(idle)
+
+            def handle_no_enqueue(worker, reason):
+                logger.debug('Not enqueueing to the worker {}, reason: {}', worker, reason)
+                if not self._pending_per_worker[worker.id]:
+                    logger.debug('No more work to be done for worker {}, leaving idling', worker)
+                    if worker_status_callback:
+                        worker_status_callback(worker, 'finished')
+
+            def handle_unused_data(data, from_retries):
+                if not self._retry:
+                    return
+                if from_retries:
+                    self._retries.insert(0, data)
+                else:
+                    self._retries.append(data)
+
+            def handle_enqueue(worker, data):
+                self._pending += 1
+                self._pending_per_worker[worker.id].append(data)
+                logger.debug('Current pending results: {}, for {} only: {}', self._pending, worker, len(self._pending_per_worker[worker.id]))
+                if worker_status_callback:
+                    worker_status_callback(worker, 'enqueued')
+
+            def try_enqueue(worker):
                 trials = 0
-                inp = next_inputs(worker)
+                has_data, from_retries, inp = next_inputs(worker)
                 while True:
                     trials += 1
-                    if not self._depleted:
+                    if has_data:
                         if worker.id in self._closed:
-                            logger.warning('Requested to enqueue new data to {} but the worker is closed - enqueue will be ignored', worker)
-                            return False, False
-                        if worker.id in self._finished:
-                            logger.warning('Requested to enqueue new data to {} but the worker has already finished running - enqueue will be ignored', worker)
-                            return False, False
+                            logger.warning('Requested to enqueue new data to {} but the worker does not accept more data (has either died or is already closed) - enqueue will be ignored', worker)
+                            handle_unused_data(inp, from_retries)
+                            return True
 
                         logger.debug('Enqueuing new data to {}', worker)
                         try:
                             if enqueue_callback:
                                 if not enqueue_callback(worker, *inp):
-                                    logger.debug('Enqueue callback returned False, closing worker {}', worker)
-                                    self._closed.add(worker.id)
-                                    return False, True
+                                    handle_no_enqueue(worker, 'enqueue callback returned False')
+                                    handle_unused_data(inp, from_retries)
+                                    return True
                             else:
                                 worker.enqueue(*inp)
                         except:
                             time.sleep(0.3)
                             if not worker.is_alive():
-                                self._pending -= self._pending_per_worker[worker.id]
-                                logger.warning('{} died while enqueueing', worker)
-                                self._finished.add(worker.id)
-                                return False, False
+                                handle_death(worker, 'while enqueueing')
+                                handle_unused_data(inp, from_retries)
+                                return True
                             else:
                                 logger.exception('Enqueueing failed for current input and worker {} but the worker is still alive - will try next input', worker)
                                 continue
 
-                        self._pending += 1
-                        self._pending_per_worker[worker.id] += 1
-                        logger.debug('Current pending results: {}, for {} only: {}', self._pending, worker, self._pending_per_worker[worker.id])
-                        return True, True
+                        handle_enqueue(worker, inp)
+                        return True
                     else:
-                        logger.debug('Input depleted - closing {}', worker)
-                        #worker.close()
-                        self._closed.add(worker.id)
-                        return False, True
+                        handle_no_enqueue(worker, 'no more data')
+                        return False
 
-            for _ in range(worker_extra_pending_inputs + 1):
-                for worker in self._workers.values():
-                    more, alive = enqueue(worker)
-                    if worker_status_callback:
-                        if not alive:
-                            worker_status_callback(worker, 'died')
-                        else:
-                            if more:
-                                worker_status_callback(worker, 'enqueued')
-                            else:
-                                worker_status_callback(worker, 'finished')
+            def handle_new_result(worker, result):
+                self._pending -= 1
+                self._pending_per_worker[wid].pop(0)
+                logger.debug('New result received from {}, total pending: {}, for this worker: {}', worker, self._pending, len(self._pending_per_worker[wid]))
+                if results_callback is not None:
+                    result = results_callback(worker, result)
+                if return_results:
+                    ret.append(result)
+                if worker.id not in self._closed: # this is very unlikely to be False, but hypothetically can happen with a custom results_callback etc.
+                    logger.debug('Trying to enqueue new data for {}', worker)
+                    try_enqueue(worker)
 
-                    if self._depleted:
-                        break
-                if self._depleted:
-                    break
+            def first_enqueue():
+                for _ in range(worker_extra_pending_inputs + 1):
+                    for worker in self._workers.values():
+                        more_data = try_enqueue(worker)
+                        if not more_data:
+                            return
 
-            while self._pending and set(self._get_all_workers_ids()).difference(self._finished):
+            first_enqueue()
+
+            while self._pending and set(self._get_all_workers_ids()).difference(self._closed):
                 ready = mp.connection.wait(list(self._get_all_queues()))
                 for conn in ready:
                     if self._aux_connection(conn):
@@ -267,51 +328,23 @@ class Pool():
                         logger.debug('Closing and forgetting output queue {}', self._queues[wid])
                         self._queues[wid].close()
                         del self._queues[wid]
-                        if wid not in self._finished:
+                        if wid not in self._closed:
                             msg = (None, False, None, wid)
                             logger.debug('Artificial closing message from worker {} created', wid)
                         else:
                             continue
 
                     if msg is None:
-                        logger.warning('Received None message - finishing the loop with {} pending executions and {} workers running', self._pending, len(set(self._workers.keys()).difference(self._finished)))
+                        logger.warning('Received None message - finishing the loop with {} pending executions and {} workers running', self._pending, len(set(self._workers.keys()).difference(self._closed)))
                         break
 
                     unused_counter, flag, result, wid = msg
                     assert wid in self._workers
                     worker = self._workers.get(wid, None)
                     if not flag:
-                        logger.warning('{} has died', worker)
-                        self._pending -= self._pending_per_worker[wid]
-                        # self._pending_per_worker[wid]
-                        logger.debug('Marking {} as finished', worker)
-                        self._finished.add(worker.id)
-                        if worker_status_callback:
-                            worker_status_callback(worker, 'died')
+                        handle_death(worker)
                     else:
-                        assert wid not in self._closed and wid not in self._finished
-                        self._pending -= 1
-                        self._pending_per_worker[wid] -= 1
-                        logger.debug('New result received from {}, total pending: {}, for this worker: {}', worker, self._pending, self._pending_per_worker[wid])
-                        if results_callback is not None:
-                            result = results_callback(worker, result)
-                        if return_results:
-                            ret.append(result)
-                        if worker.id not in self._closed:
-                            logger.debug('Trying to enqueue new data for {}', worker)
-                            more, alive = enqueue(worker)
-                            if not more and alive and not self._pending_per_worker[wid]:
-                                logger.debug('No more work to be done for {} - marking as finished', worker)
-                                self._finished.add(worker.id)
-
-                            if worker_status_callback:
-                                if not alive:
-                                    worker_status_callback(worker, 'died')
-                                else:
-                                    if more:
-                                        worker_status_callback(worker, 'enqueued')
-                                    else:
-                                        worker_status_callback(worker, 'finished')
+                        handle_new_result(worker, result)
 
             logger.debug('All workers has finished and/or died, Pool.run is finishing...')
         finally:

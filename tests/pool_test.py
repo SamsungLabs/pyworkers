@@ -32,6 +32,16 @@ def midlife_crisis_suicide_fn(x):
     else:
         return x**2
 
+def fails_for_some_x(x):
+    return 1/x
+
+
+def fails_on_worker_0(wid, x):
+    if not wid:
+        raise SuicideError()
+
+    return x**2
+
 
 # This class implements standard persistent behaviour,
 # however if a SuicideError happens when evaluating the target function
@@ -302,6 +312,120 @@ class PoolTest(GenericTest):
             check.add(x)
 
         self.assertEqual(list(sorted(check)), list(range(1)))
+
+    def test_retries(self):
+        p = Pool(fails_for_some_x, name='Test Pool')
+        with p:
+            for i in range(3):
+                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            results = p.run(iter(i for i in range(3)))
+
+        self.assertEqual(len(p.workers), 3)
+        for w in p.workers:
+            self.assertFalse(w.is_alive())
+            self.assertTrue(w.has_error)
+            self.assertIsInstance(w.error, ZeroDivisionError)
+
+        check = set()
+        for r in results:
+            x = int(1/r)
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), [1, 2])
+
+    def test_retries_x2(self):
+        p = Pool(fails_for_some_x, name='Test Pool')
+        with p:
+            for i in range(3):
+                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            results = p.run(iter(i for i in range(6)), worker_extra_pending_inputs=1)
+
+        self.assertEqual(len(p.workers), 3)
+        for w in p.workers:
+            self.assertFalse(w.is_alive())
+            self.assertTrue(w.has_error)
+            self.assertIsInstance(w.error, ZeroDivisionError)
+
+        check = set()
+        for r in results:
+            x = int(1/r)
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), [1, 2, 3, 4, 5])
+
+    def test_retry_one_death(self):
+        p = Pool(fails_on_worker_0, name='Test Pool')
+        with p:
+            for i in range(3):
+                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            def enqueue_callback(worker, *args):
+                worker.enqueue(worker.userid, *args)
+                return True
+
+            results = p.run(iter(i for i in range(6)), enqueue_callback=enqueue_callback)
+
+        self.assertEqual(len(p.workers), 3)
+        for idx, w in enumerate(p.workers):
+            self.assertFalse(w.is_alive())
+            if not idx:
+                self.assertTrue(w.has_error)
+                self.assertIsInstance(w.error, SuicideError)
+            else:
+                self.assertFalse(w.has_error)
+
+        check = set()
+        for r in results:
+            x = int(math.sqrt(r))
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), list(range(6)))
+
+    def test_no_retry_one_death(self):
+        p = Pool(fails_on_worker_0, name='Test Pool', retry=False)
+        with p:
+            for i in range(3):
+                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            def enqueue_callback(worker, *args):
+                worker.enqueue(worker.userid, *args)
+                return True
+
+            results = p.run(iter(i for i in range(3)), enqueue_callback=enqueue_callback)
+
+        self.assertEqual(len(p.workers), 3)
+        for idx, w in enumerate(p.workers):
+            self.assertFalse(w.is_alive())
+            if not idx:
+                self.assertTrue(w.has_error)
+                self.assertIsInstance(w.error, SuicideError)
+            else:
+                self.assertFalse(w.has_error)
+
+        check = set()
+        for r in results:
+            x = int(math.sqrt(r))
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), [1,2])
 
 
 for cls in [WorkerType.THREAD, WorkerType.PROCESS, WorkerType.REMOTE]:
