@@ -289,7 +289,7 @@ class Pool():
 
             def handle_new_result(worker, result):
                 self._pending -= 1
-                self._pending_per_worker[wid].pop(0)
+                self._pending_per_worker[worker.id].pop(0)
                 logger.debug('New result received from {}, total pending: {}, for this worker: {}', worker, self._pending, len(self._pending_per_worker[wid]))
                 if results_callback is not None:
                     result = results_callback(worker, result)
@@ -325,7 +325,7 @@ class Pool():
                         assert found
                         if not found:
                             raise RuntimeError(f'Worker for the queue {conn} could not be found')
-                        logger.debug('Closing and forgetting output queue {}', self._queues[wid])
+                        logger.debug('Closing and forgetting output queue {} of worker {}', self._queues[wid], wid)
                         self._queues[wid].close()
                         del self._queues[wid]
                         if wid not in self._closed:
