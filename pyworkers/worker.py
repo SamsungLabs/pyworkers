@@ -202,7 +202,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         '''
         if cls.worker_type != WorkerType.REMOTE:
             if inst is not None:
-                assert inst._host != inst._parent_host or inst._pid != inst._parent_pid
+                assert inst._host == inst._parent_host and (inst._pid != inst._parent_pid or inst._tid != inst._parent_tid)
             return False
         return True
 
