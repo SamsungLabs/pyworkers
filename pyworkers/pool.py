@@ -234,7 +234,7 @@ class Pool():
                 if not self._pending_per_worker[worker.id]:
                     logger.debug('No more work to be done for worker {}, leaving idling', worker)
                     if worker_status_callback:
-                        worker_status_callback(worker, 'finished')
+                        worker_status_callback(worker, 'idle')
 
             def handle_unused_data(data, from_retries):
                 if not self._retry:
@@ -291,6 +291,8 @@ class Pool():
                 self._pending -= 1
                 self._pending_per_worker[worker.id].pop(0)
                 logger.debug('New result received from {}, total pending: {}, for this worker: {}', worker, self._pending, len(self._pending_per_worker[wid]))
+                if worker_status_callback:
+                    worker_status_callback(worker, 'finished')
                 if results_callback is not None:
                     result = results_callback(worker, result)
                 if return_results:
