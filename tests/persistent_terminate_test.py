@@ -14,6 +14,7 @@ from pyworkers.utils import active_sleep, is_windows
 
 
 def test_fun(x):
+    active_sleep(1)
     return x**2
 
 
@@ -86,7 +87,7 @@ class PersistentTerminateTest(GenericTest):
         self.assertTrue(self.worker.is_alive())
         for x in xs:
             self.worker.enqueue(x)
-        
+
         self.assertFalse(self.worker.terminate(timeout=0, force=False))
         self.assertTrue(self.worker.wait(4))
         self.assertFalse(self.worker.is_alive())

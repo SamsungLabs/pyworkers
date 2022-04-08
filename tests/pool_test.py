@@ -372,11 +372,11 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.is_alive())
 
-            def enqueue_callback(worker, *args):
+            def enqueue_fn(worker, *args):
                 worker.enqueue(worker.userid, *args)
                 return True
 
-            results = p.run(iter(i for i in range(6)), enqueue_callback=enqueue_callback)
+            results = p.run(iter(i for i in range(6)), enqueue_fn=enqueue_fn)
 
         self.assertEqual(len(p.workers), 3)
         for idx, w in enumerate(p.workers):
@@ -404,11 +404,11 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.is_alive())
 
-            def enqueue_callback(worker, *args):
+            def enqueue_fn(worker, *args):
                 worker.enqueue(worker.userid, *args)
                 return True
 
-            results = p.run(iter(i for i in range(3)), enqueue_callback=enqueue_callback)
+            results = p.run(iter(i for i in range(3)), enqueue_fn=enqueue_fn)
 
         self.assertEqual(len(p.workers), 3)
         for idx, w in enumerate(p.workers):

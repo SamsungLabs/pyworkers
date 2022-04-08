@@ -164,7 +164,7 @@ class Pool():
         return self._close(timeout, force, False)
 
 
-    def run(self, *input_sources, results_callback=None, enqueue_callback=None, worker_status_callback=None, worker_extra_pending_inputs=0, return_results=True):
+    def run(self, *input_sources, worker_callback=None, enqueue_fn=None, worker_extra_pending_inputs=0, return_results=True):
         if self._pool_closed:
             raise RuntimeError('Trying to use a closed Pool')
         if self._map_guard:
@@ -218,8 +218,8 @@ class Pool():
                 self._pending -= len(self._pending_per_worker[worker.id])
                 self._pending_per_worker[worker.id].clear()
                 self._closed.add(worker.id)
-                if worker_status_callback:
-                    worker_status_callback(worker, 'died')
+                if worker_callback:
+                    worker_callback(worker, 'died')
 
                 while self._retries:
                     idle = get_next_idle_worker()
@@ -233,8 +233,8 @@ class Pool():
                 logger.debug('Not enqueueing to the worker {}, reason: {}', worker, reason)
                 if not self._pending_per_worker[worker.id]:
                     logger.debug('No more work to be done for worker {}, leaving idling', worker)
-                    if worker_status_callback:
-                        worker_status_callback(worker, 'idle')
+                    if worker_callback:
+                        worker_callback(worker, 'idle')
 
             def handle_unused_data(data, from_retries):
                 if not self._retry:
@@ -248,8 +248,8 @@ class Pool():
                 self._pending += 1
                 self._pending_per_worker[worker.id].append(data)
                 logger.debug('Current pending results: {}, for {} only: {}', self._pending, worker, len(self._pending_per_worker[worker.id]))
-                if worker_status_callback:
-                    worker_status_callback(worker, 'enqueued')
+                if worker_callback:
+                    worker_callback(worker, 'enqueued')
 
             def try_enqueue(worker):
                 trials = 0
@@ -264,9 +264,9 @@ class Pool():
 
                         logger.debug('Enqueuing new data to {}', worker)
                         try:
-                            if enqueue_callback:
-                                if not enqueue_callback(worker, *inp):
-                                    handle_no_enqueue(worker, 'enqueue callback returned False')
+                            if enqueue_fn:
+                                if not enqueue_fn(worker, *inp):
+                                    handle_no_enqueue(worker, 'user-provided enqueue function returned False')
                                     handle_unused_data(inp, from_retries)
                                     return True
                             else:
@@ -291,10 +291,8 @@ class Pool():
                 self._pending -= 1
                 self._pending_per_worker[worker.id].pop(0)
                 logger.debug('New result received from {}, total pending: {}, for this worker: {}', worker, self._pending, len(self._pending_per_worker[wid]))
-                if worker_status_callback:
-                    worker_status_callback(worker, 'finished')
-                if results_callback is not None:
-                    result = results_callback(worker, result)
+                if worker_callback:
+                    worker_callback(worker, 'finished', result)
                 if return_results:
                     ret.append(result)
                 if worker.id not in self._closed: # this is very unlikely to be False, but hypothetically can happen with a custom results_callback etc.
