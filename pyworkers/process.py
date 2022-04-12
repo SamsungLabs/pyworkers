@@ -2,15 +2,13 @@ from .worker import Worker, WorkerType, WorkerTerminatedError
 
 import os
 import queue
-import signal
 import logging
-import platform
 import threading
 import multiprocessing as mp
 
-from .utils import foreign_raise, classproperty, Pipe, is_windows, BraceStyleAdapter
+from .utils import foreign_raise, classproperty, Pipe, get_logger
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 
 class ProcessWorker(Worker):
@@ -135,6 +133,8 @@ class ProcessWorker(Worker):
         if self._comms.parent_end in ready:
             self._pid, self._tid = self._comms.parent_end.recv()
             assert self._pid == self._child.pid
+        else:
+            assert self._child.sentinel in ready
 
     # Children-side, main (working) thread
     def _run(self):

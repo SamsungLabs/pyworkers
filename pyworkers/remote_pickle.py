@@ -23,18 +23,26 @@
 from .utils import python_is_exactly
 
 import io
-import copyreg
 import inspect
 
 
 class SupportRemoteGetStateMeta(type):
     supported_classes = []
+    _cls_check_cache = {}
+
     def __init__(cls, name, bases, dict):
         super().__init__(name, bases, dict)
+        cls.__check_type_cached(cls)
+
+    def __check_type_cached(cls, t):
+        if t in cls._cls_check_cache:
+            return cls._cls_check_cache[t]
+
         allow_remote = True
         first_not_remote = None
         has_remote = False
-        for base in cls.__mro__[:-1]:
+
+        for base in t.__mro__[:-1]:
             d = base.__dict__
             if d.get('__reduce_ex__') or d.get('__reduce__'):
                 has_remote = False
@@ -43,10 +51,10 @@ class SupportRemoteGetStateMeta(type):
                 signature = inspect.signature(d.get('__getstate__'))
                 param_names = [param.name for param in signature.parameters.values()]
                 param_kinds = [param.kind for param in signature.parameters.values()]
-    
+
                 if 'remote' in param_names:
                     if not allow_remote:
-                        msg = 'A base class {!r} of class {!r}'.format(first_not_remote.__name__, cls.__name__) if first_not_remote is not cls else 'A class {!r}'.format(cls.__name__)
+                        msg = 'A base class {!r} of class {!r}'.format(first_not_remote.__name__, t.__name__) if first_not_remote is not t else 'A class {!r}'.format(t.__name__)
                         msg += ' does not support "remote" argument to __getstate__ but one of its base classes ({!r}) does. This inconsistency can be potentially a source of problems.'.format(base.__name__)
                         raise Warning(msg)
                     has_remote = True
@@ -57,8 +65,17 @@ class SupportRemoteGetStateMeta(type):
                     first_not_remote = base
 
         if has_remote:
-            assert cls not in cls.supported_classes
-            cls.supported_classes.append(cls)
+            assert t not in cls.supported_classes
+            cls.supported_classes.append(t)
+
+        cls._cls_check_cache[t] = has_remote
+        return has_remote
+
+
+    def __subclasscheck__(cls, subclass):
+        if cls is not SupportRemoteGetState:
+            return super().__subclasscheck__(subclass)
+        return cls.__check_type_cached(subclass)
 
 
 class SupportRemoteGetState(metaclass=SupportRemoteGetStateMeta):

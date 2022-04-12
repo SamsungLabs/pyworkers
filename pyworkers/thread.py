@@ -2,14 +2,12 @@ from .worker import Worker, WorkerType, WorkerTerminatedError
 from .utils import foreign_raise, classproperty
 
 import os
-import queue
 import signal
-import logging
 import threading
 
-from .utils import BraceStyleAdapter
+from .utils import get_logger
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 
 class ThreadWorker(Worker):

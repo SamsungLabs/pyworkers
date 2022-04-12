@@ -1,16 +1,13 @@
-from .remote import RemoteWorker, recv_msg, send_msg, ConnectionClosedError, set_linger
+from .remote import RemoteWorker, recv_msg, send_msg, ConnectionClosedError
 from .persistent import PersistentWorker
 
 import copy
-import queue
 import socket
-import logging
 import multiprocessing as mp
-import multiprocessing.connection
 
-from .utils import is_windows, BraceStyleAdapter, LocalPipe
+from .utils import is_windows, get_logger, LocalPipe
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 
 class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
@@ -76,7 +73,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
             try:
                 result = recv_msg(self._socket, comment='data: result')
             except ConnectionClosedError:
-                logger.info('Connection closed by the remote peer')
+                logger.debug('Connection closed by the remote peer')
                 self._socket_closed = True
                 self._result = (False, None)
                 if not last_partial_result_signalled:
@@ -94,8 +91,8 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                     assert value is None
                     assert wid == self.id
                 else:
-                    logger.debug(f'New intermediate result received: {counter}/{remote_counter}')
                     counter += 1
+                    logger.debug(f'New intermediate result received: {counter}/{remote_counter}')
                     self._results_pipe.child_end.put(result)
                     assert counter == remote_counter
                     assert wid == self.id

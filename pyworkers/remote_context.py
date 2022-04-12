@@ -2,17 +2,14 @@ import os
 import copy
 import signal
 import socket
-import logging
 import contextlib
 
 from .persistent_process import PersistentProcessWorker
-from .persistent_remote import PersistentRemoteWorker
-from .worker import autoclose_active_children, Worker
 from .remote_pickle import loads, dumps, SupportRemoteGetState
 from .remote import sanitize_target_host, send_msg, recv_msg, ConnectionClosedError, set_keepalive
-from .utils import BraceStyleAdapter
+from .utils import get_logger
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 
 class RemoteContextWorker(PersistentProcessWorker):

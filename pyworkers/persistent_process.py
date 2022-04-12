@@ -1,7 +1,6 @@
 from .process import ProcessWorker
 from .persistent import PersistentWorker
-from .worker import WorkerTerminatedError
-from .utils import Pipe, is_windows, active_sleep
+from .utils import Pipe
 
 import copy
 import multiprocessing as mp

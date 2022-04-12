@@ -2,22 +2,19 @@ from .worker import Worker, WorkerType, WorkerTerminatedError
 
 import os
 import sys
-import queue
 import runpy
 import types
 import struct
 import socket
 import signal
-import logging
 import threading
 import collections
 import multiprocessing as mp
-import multiprocessing.connection
 
 from . import remote_pickle
-from .utils import get_hostname, foreign_raise, is_windows, BraceStyleAdapter, classproperty, SupportClassPropertiesMeta, Pipe
+from .utils import get_hostname, foreign_raise, is_windows, get_logger, classproperty, SupportClassPropertiesMeta, Pipe
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 default_port = 60006
 
@@ -29,7 +26,7 @@ class ConnectionClosedError(Exception):
 def send_msg(sock, msg, comment=None):
     data = remote_pickle.dumps(msg)
     data_len = struct.pack('!I', len(data))
-    logger.debug('Sending a message: {} ({})', len(data), comment)
+    logger.abusive('Sending a message: {} ({})', len(data), comment)
     try:
         sock.sendall(data_len + data)
     except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError) as e:
@@ -43,7 +40,7 @@ def recv_msg(sock, state_overwrites=None, comment=None):
     except (BrokenPipeError, struct.error, ConnectionResetError, ConnectionAbortedError, OSError) as e:
         raise ConnectionClosedError() from e
 
-    logger.debug('Receiving a message: {} ({})', data_len, comment)
+    logger.abusive('Receiving a message: {} ({})', data_len, comment)
     data = bytes()
     try:
         while data_len:
@@ -52,7 +49,7 @@ def recv_msg(sock, state_overwrites=None, comment=None):
             data += chunk
     except (ConnectionResetError) as e:
         raise ConnectionClosedError() from e
-    logger.debug('Message received ({}), deserializing...', comment)
+    logger.abusive('Message received ({}), deserializing...', comment)
     msg = remote_pickle.loads(data, extra_kwargs=state_overwrites)
     return msg
 
@@ -174,7 +171,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 except ConnectionClosedError:
                     # connection closed, nothing more to do than assume the child is dead
                     # at the remote side
-                    logger.info('Connection to the remote control thread is closed - assuming child dead')
+                    logger.details('Connection to the remote control thread is closed - assuming child dead')
                     self._remote_dead = True
                     result = False
 
@@ -183,7 +180,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 if not result:
                     if not self._remote_dead:
                         send_msg(self._ctrl_sock, None, comment='ctrl: release')
-                    logger.info('Closing frontend-side control socket')
+                    logger.details('Closing frontend-side control socket')
                     self._ctrl_sock.close()
                     self._remote_dead = True
                     self._dead = True
@@ -222,7 +219,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 return True
 
             if not self._remote_dead:
-                logger.info('Sending a wait message with args: {}', (remote_timeout, ))
+                logger.debug('Sending a wait message with args: {}', (remote_timeout, ))
                 try:
                     send_msg(self._ctrl_sock, ('wait', (remote_timeout, )), comment='ctrl: wait')
                     result = recv_msg(self._ctrl_sock, comment='ctrl: wait result')
@@ -230,7 +227,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 except ConnectionClosedError:
                     # connection closed, nothing more to do than assume the child is dead
                     # at the remote side
-                    logger.info('Connection to the remote control thread is closed - assuming child dead')
+                    logger.details('Connection to the remote control thread is closed - assuming child dead')
                     self._remote_dead = True
                     result = True
 
@@ -240,7 +237,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
                 if not self._remote_dead:
                     send_msg(self._ctrl_sock, None, 'ctrl: release')
-                logger.info('Closing frontend-side control socket')
+                logger.debug('Closing frontend-side control socket')
                 self._ctrl_sock.close()
                 self._remote_dead = True
 
@@ -298,7 +295,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 return True
 
             if not self._remote_dead:
-                logger.info('Sending a terminate message with args: {}', (remote_timeout, force))
+                logger.debug('Sending a terminate message with args: {}', (remote_timeout, force))
                 try:
                     send_msg(self._ctrl_sock, ('terminate', (remote_timeout, force)), comment='terminate')
                     #self._socket.shutdown(socket.SHUT_WR)
@@ -307,7 +304,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 except ConnectionClosedError:
                     # connection closed, nothing more to do than assume the child is dead
                     # at the remote side
-                    logger.info('Connection to the remote control thread is closed - assuming child dead')
+                    logger.debug('Connection to the remote control thread is closed - assuming child dead')
                     self._remote_dead = True
                     result = True
 
@@ -320,7 +317,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
                 if not self._remote_dead:
                     send_msg(self._ctrl_sock, None, comment='ctrl: release')
-                logger.info('Closing frontend-side control socket')
+                logger.debug('Closing frontend-side control socket')
                 self._ctrl_sock.close()
                 self._remote_dead = True
 
@@ -345,7 +342,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
     # Parent-side, calling thread
     def _start(self):
-        logger.debug('Connecting to {}', self._target_host)
+        logger.details('Connecting to {}', self._target_host)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         set_linger(self._socket, True, 0)
         set_keepalive(self._socket, True)
@@ -358,11 +355,11 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._dead = False
         logger.debug('Waiting for the frontend thread to notify that everything is up and running...')
         self._startup_sync.wait()
-        logger.info('Child created successfully, continuing with the main thread')
+        logger.details('Child created successfully, continuing with the main thread')
 
     # Parent-side, helper thread managing network communication and fetching results from the child
     def _run_frontend(self):
-        logger.debug('Frontend reached')
+        logger.details('Frontend reached')
         assert os.getpid() == self._pid # the same process as parent
         assert threading.get_ident() != self._tid # different thread
 
@@ -385,7 +382,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._fetch_results()
         logger.debug('Closing down frontend-side socket')
         self._socket.close()
-        logger.info('Frontend thread finished')
+        logger.details('Frontend thread finished')
 
     # Parent-side, called from frontend (controlling thread)
     # Helper function implementing results fetching mechanism
@@ -393,14 +390,14 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     # is overwritten in the persistent remote worker class,
     # where fetching happens in the loop
     def _fetch_results(self):
-        logger.info('Waiting for the result...')
+        logger.details('Waiting for the result...')
         try:
             self._result = recv_msg(self._socket, comment='data: result')
-            logger.info('Result received')
+            logger.debug('Result received')
         except ConnectionClosedError:
             self._result = (False, None)
-            logger.info('Connection to the child has been closed before receiving the result')
-        logger.debug('Result: {}', self._result)
+            logger.debug('Connection to the child has been closed before receiving the result')
+        logger.details('Result: {}', self._result)
 
     # Handles serialization between:
     # if remote is True: frontend* (parent-side) --> server process (remote-side)
@@ -461,7 +458,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             logger.debug('Waiting for a connect to the control socket from the parent')
             self._ctrl_sock, ctrl_peer = incoming.accept()
             set_keepalive(self._ctrl_sock, True)
-            logger.debug('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), ctrl_peer)
+            logger.details('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), ctrl_peer)
             logger.debug('Closing listening socket')
             incoming.close()
 
@@ -470,7 +467,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._ctrl_comms = Pipe()
 
             # we need to be careful not to send a control socket here (see __getstate__)
-            self._child = mp.get_context('spawn').Process(target=self._run_backend, name=f'{self.name} remote backend')
+            self._child = mp.get_context('spawn').Process(target=self._run_backend, name=f'{self.name}')
             self._child.start()
             self._dead = False
 
@@ -496,7 +493,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
     # Remote-side, child process' main (working) thread
     def _run_backend(self):
-        logger.debug('Backend reached')
+        logger.details('Backend reached')
         logger.debug('Data socket is: {}', self._socket.getpeername())
         assert self._host != get_hostname() or self._pid != os.getpid()
         assert self._socket.getsockname() == self._target_host
@@ -562,7 +559,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
                 self._init_child()
 
-                logger.info('Running the main function')
+                logger.debug('Running the main function')
                 result = self.do_work()
                 result = (True, result)
             except Exception as e:
@@ -570,7 +567,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 result = (False, e)
             finally:
                 if self._ctrl_thread_loc.is_alive():
-                    logger.info('Releasing the local control thread')
+                    logger.debug('Releasing the local control thread')
                     self._ctrl_comms.parent_end.send(None)
                     self._ctrl_thread_loc.join()
         except Exception as e:
@@ -580,12 +577,12 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             unused_sync = self._comms.child_end.recv()
             self._comms.child_end.close()
             if hasattr(self, '_ctrl_thread_loc') and self._ctrl_thread_loc.is_alive():
-                logger.info('Releasing the local control thread')
+                logger.debug('Releasing the local control thread')
                 self._ctrl_comms.parent_end.send(None)
                 self._ctrl_thread_loc.join()
         finally:
             self._cleanup()
-            logger.info('Sending result')
+            logger.debug('Sending result')
             send_msg(self._socket, result, 'data: result')
             logger.debug('Closing down backend-side socket')
             self._socket.shutdown(socket.SHUT_WR)
@@ -593,7 +590,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             if is_windows() and self._aux_socket_my is not None:
                 self._aux_socket_my.close()
 
-        logger.info('Backend finished')
+        logger.details('Backend finished')
 
     def _init_child(self):
         pass
@@ -603,7 +600,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
     # Remote-side, child process' control thread to communicate with the server process (local communication)
     def _ctrl_fn_local(self):
-        logger.debug('Local control thread started')
+        logger.details('Local control thread started')
         assert self._remote_side and self._is_backend
         sig = self._ctrl_comms.child_end.recv()
         try:
@@ -617,7 +614,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         finally:
             if is_windows():
                 self._aux_socket_ctrl.close()
-        logger.info('Closing local control thread')
+        logger.details('Closing local control thread')
 
     # Remote-side, server's process control thread handling control requests w.r.t. the child process
     # from the parent-side (remote communication)
@@ -637,7 +634,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     #   +----------*network* ------------------------------------------------+
     #
     def _ctrl_fn_remote(self):
-        logger.debug('Remote control thread started')
+        logger.details('Remote control thread started')
         assert self._remote_side and not self._is_backend
         self._startup_sync.set()
         try:
@@ -655,7 +652,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                     raise GracefulExitError()
 
                 cmd, args = msg
-                logger.info(f'Received new remote control message: {cmd}')
+                logger.debug(f'Received new remote control message: {cmd}')
                 if cmd == 'terminate':
                     logger.debug('Calling local terminate...')
                     result = self.terminate(*args)
@@ -678,4 +675,4 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             except OSError:
                 pass
 
-        logger.info('Closing remote control thread')
+        logger.details('Closing remote control thread')

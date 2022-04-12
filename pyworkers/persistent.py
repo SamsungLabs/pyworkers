@@ -1,4 +1,4 @@
-from .worker import Worker, WorkerType, classproperty
+from .worker import Worker, classproperty
 
 import queue
 

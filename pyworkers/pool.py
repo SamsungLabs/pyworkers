@@ -1,14 +1,11 @@
 import time
-import queue
-import logging
 import multiprocessing as mp
-import multiprocessing.connection
 
-from .worker import Worker
-from .persistent import PersistentWorker, WorkerType
-from .utils import BraceStyleAdapter, Pipe
+from .worker import Worker, WorkerType
+from .persistent import PersistentWorker
+from .utils import get_logger, Pipe
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 
 class Pool():

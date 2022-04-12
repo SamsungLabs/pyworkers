@@ -5,8 +5,15 @@ import ctypes
 import logging
 import platform
 import multiprocessing as mp
-import multiprocessing.connection
 from inspect import getfullargspec
+
+
+STATUS = int((logging.INFO + logging.WARNING) / 2)
+DETAILS = int((logging.DEBUG + logging.INFO) / 2)
+ABUSIVE = int((logging.NOTSET + logging.DEBUG) / 2)
+logging.addLevelName(STATUS, 'STATUS')
+logging.addLevelName(DETAILS, 'DETAILS')
+logging.addLevelName(ABUSIVE, 'ABUSIVE')
 
 
 class BraceMessage(object):
@@ -26,6 +33,15 @@ class BraceStyleAdapter(logging.LoggerAdapter):
     def __init__(self, logger):
         self.logger = logger
 
+    def status(self, msg, *args, **kwargs):
+        return self.log(STATUS, msg, *args, **kwargs)
+
+    def details(self, msg, *args, **kwargs):
+        return self.log(DETAILS, msg, *args, **kwargs)
+
+    def abusive(self, msg, *args, **kwargs):
+        return self.log(ABUSIVE, msg, *args, **kwargs)
+
     def log(self, level, msg, *args, **kwargs):
         if self.isEnabledFor(level):
             msg, log_kwargs = self.process(msg, kwargs)
@@ -35,6 +51,10 @@ class BraceStyleAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         return msg, {key: kwargs[key] 
                 for key in getfullargspec(self.logger._log).args[1:] if key in kwargs}
+
+
+def get_logger(name=None):
+    return BraceStyleAdapter(logging.getLogger(name))
 
 
 class classproperty(property):

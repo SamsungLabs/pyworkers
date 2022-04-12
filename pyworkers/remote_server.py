@@ -1,11 +1,9 @@
 import os
-import queue
+import re
 import signal
 import socket
-import struct
 import logging
 import itertools
-import traceback
 import threading
 import contextlib
 import subprocess
@@ -13,10 +11,9 @@ import subprocess
 from .remote import send_msg, recv_msg, set_keepalive, set_linger, default_port, ConnectionClosedError
 from .worker import WorkerTerminatedError
 from .process import ProcessWorker
-from .utils import foreign_raise, BraceStyleAdapter, is_windows
-from .remote_pickle import loads
+from .utils import foreign_raise, get_logger, is_windows
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 
 class RemoteServer():
@@ -247,6 +244,9 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_c
         stdin=subprocess.PIPE)
 
 
+_server_running_re = re.compile(r'Listening on \(.*\)')
+
+
 @contextlib.contextmanager
 def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, command=None, suppress_children=True):
     ''' Returns a context manager which returns a remote server on the specified host
@@ -343,6 +343,11 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
         def __getattr__(self, name):
             return getattr(self.proc, name)
 
+        def close_fetcher(self):
+            assert self.ctrl_c
+            if self._fetcher.is_alive():
+                foreign_raise(self._fetcher.ident, RuntimeError)
+
     _stdout_buff = bytearray()
     ssh_proc = _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_children)
     ssh_proc = ssh_popen(ssh_proc, _stdout_buff)
@@ -352,7 +357,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
         while ssh_proc.poll() is None:
             line = ssh_proc.proc.stdout.readline()
             _stdout_buff += line
-            if line.startswith(b'Listening'):
+            if _server_running_re.search(line.decode('utf-8')):
                 server_running = True
                 break
 
@@ -367,6 +372,8 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
             pass
     finally:
         ssh_proc.terminate()
+        ssh_proc.close_fetcher()
+
 
 
 if __name__ == '__main__':
@@ -392,6 +399,8 @@ if __name__ == '__main__':
         target_logger.setLevel(logging.DEBUG)
         ch.setLevel(logging.DEBUG)
 
+    fmt = logging.Formatter('[{asctime}][{process}] {message}', style='{')
+    ch.setFormatter(fmt)
     target_logger.addHandler(ch)
 
     run_server((args.addr, args.port), install_handlers=True, close_on_none=args.close_on_none)

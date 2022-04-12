@@ -1,13 +1,10 @@
 from .thread import ThreadWorker
 from .persistent import PersistentWorker
-from .utils import LocalPipe, BraceStyleAdapter
+from .utils import LocalPipe, get_logger
 
 import copy
-import queue
-import logging
-import threading
 
-logger = BraceStyleAdapter(logging.getLogger(__name__))
+logger = get_logger(__name__)
 
 
 class PersistentThreadWorker(PersistentWorker, ThreadWorker):
