@@ -5,11 +5,26 @@ from collections import OrderedDict
 from .state import RemoteState
 
 
+class dyn_dispatch_table(dict):
+    def __init__(self, method, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.method = method
+
+    def __getitem__(self, key):
+        if key not in self:
+            if isinstance(key, type):
+                from ..remote_pickle import SupportRemoteGetState
+                if issubclass(key, SupportRemoteGetState):
+                    return self.method
+
+        return super().__getitem__(key)
+
+
 class RemotePickler36(pickle.Pickler):
     @staticmethod
     def subject_to_custom_reduce(obj):
         from ..remote_pickle import SupportRemoteGetState # pylint: disable(relative-beyond-top-level)
-        return type(obj) in SupportRemoteGetState.supported_classes
+        return issubclass(type(obj), SupportRemoteGetState)
 
     def remote_reduce(self, obj):
         assert getattr(type(obj), '__reduce_ex__') is object.__reduce_ex__, obj.__reduce_ex__
@@ -64,6 +79,6 @@ class RemotePickler36(pickle.Pickler):
         from ..remote_pickle import SupportRemoteGetState
         super().__init__(*args, **kwargs)
         self._remote = remote
-        self.dispatch_table = {}
+        self.dispatch_table = dyn_dispatch_table(self.remote_reduce) if self._remote else {}
         for cls in SupportRemoteGetState.supported_classes:
             self.dispatch_table[cls] = self.remote_reduce

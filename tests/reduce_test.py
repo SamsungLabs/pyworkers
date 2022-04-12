@@ -83,6 +83,30 @@ class NestedPatched2(remote_pickle.SupportRemoteGetState):
         self.__dict__.update(state)
 
 
+class ImplicitRemote():
+    def __init__(self):
+        self.from_remote = False
+
+    def __getstate__(self, remote=False):
+        ret = self.__dict__.copy()
+        ret['from_remote'] = remote
+        return ret
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+
+class ShadowedRemote(ImplicitRemote):
+    def __init__(self):
+        super().__init__()
+        self.foo = 10
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state['foo'] = 0
+        return state
+
+
 class RemotePickleTest(unittest.TestCase):
     def test_simple_remote(self):
         orig = (Foo(), Bar(), Dip(), Pap(), Tup(), Wep())
@@ -171,6 +195,32 @@ class RemotePickleTest(unittest.TestCase):
         self.assertEqual(new.normal, 3)
         self.assertEqual(new.special, 0)
 
+    def test_implicit(self):
+        orig = ImplicitRemote()
+        data = remote_pickle.dumps(orig)
+        new = remote_pickle.loads(data)
+        self.assertFalse(orig.from_remote)
+        self.assertTrue(new.from_remote)
+
+    def test_implicit_standard(self):
+        orig = ImplicitRemote()
+        data = pickle.dumps(orig)
+        new = pickle.loads(data)
+        self.assertFalse(orig.from_remote)
+        self.assertFalse(new.from_remote)
+
+    def test_shadowed(self):
+        orig = ShadowedRemote()
+        with self.assertRaisesRegex(Warning, r'''A class 'ShadowedRemote' does not support "remote" argument to __getstate__ but one of its base classes \('.*'\) does. This inconsistency can be potentially a source of problems.'''):
+            remote_pickle.dumps(orig)
+
+    def test_shadowed_standard(self):
+        orig = ShadowedRemote()
+        pickle.dumps(orig)
+
+    def test_shadowed_fake_standard(self):
+        orig = ShadowedRemote()
+        remote_pickle.dumps(orig, remote=False)
 
 if __name__ == '__main__':
     unittest.main()
