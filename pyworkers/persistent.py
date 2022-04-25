@@ -72,9 +72,6 @@ class PersistentWorker(Worker):
             if self.is_alive():
                 raise RuntimeError(f'Could not stop a worker!')
 
-        print('!!!!! RESTARTING !!!!!')
-        import time; time.sleep(5)
-
         ctor_args, ctor_kwargs = self._get_restart_args()
         self.__dict__.clear()
         type(self).__init__(self, *ctor_args, results_pipe=results_pipe, **ctor_kwargs, _is_restart=True)
