@@ -160,6 +160,19 @@ class Pool():
     def terminate(self, timeout=None, force=None):
         return self._close(timeout, force, False)
 
+    def restart_workers(self, timeout=1, **kwargs):
+        if self._pool_closed:
+            raise RuntimeError('Trying to restart workers on a closed Pool')
+
+        to_restart = list(self._workers.items())
+
+        for oldid, w in to_restart:
+            queue = Pipe()
+            w.restart(timeout=timeout, results_pipe=queue, **kwargs)
+            del self._workers[oldid]
+            del self._queues[oldid]
+            self._workers[w.id] = w
+            self._queues[w.id] = queue.parent_end
 
     def run(self, *input_sources, worker_callback=None, enqueue_fn=None, worker_extra_pending_inputs=0, return_results=True):
         if self._pool_closed:

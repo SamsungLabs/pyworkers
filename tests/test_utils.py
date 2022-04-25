@@ -53,6 +53,8 @@ class GenericTest():
         return super().assertFalse(*args, **kwargs) # pylint: disable=no-member
     def assertEqual(self, *args, **kwargs):
         return super().assertEqual(*args, **kwargs) # pylint: disable=no-member
+    def assertNotEqual(self, *args, **kwargs):
+        return super().assertNotEqual(*args, **kwargs) # pylint: disable=no-member
     def assertIs(self, *args, **kwargs):
         return super().assertIs(*args, **kwargs) # pylint: disable=no-member
     def assertIsNot(self, *args, **kwargs):

@@ -124,6 +124,43 @@ class PoolTest(GenericTest):
             self.assertFalse(w.is_alive())
             self.assertFalse(w.has_error)
 
+        self.assertEqual(sum(w.result for w in p.workers), 20) # collectively, worker have processed 20 requests
+
+        check = set()
+        for r in results:
+            x = int(math.sqrt(r))
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), list(range(10)))
+
+        for r in results2:
+            x = int(math.sqrt(r))
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), list(range(20)))
+
+    def test_restart(self):
+        p = Pool(test_fn, name='Test Pool')
+        with p:
+            for i in range(3):
+                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            results = p.run(iter(i for i in range(10)))
+            p.restart_workers()
+            results2 = p.run(iter(i for i in range(10, 20)))
+
+        self.assertEqual(len(p.workers), 3)
+        for w in p.workers:
+            self.assertFalse(w.is_alive())
+            self.assertFalse(w.has_error)
+
+        self.assertEqual(sum(w.result for w in p.workers), 10) # due to a restart, collectively, worker are only aware of the second 10 requests
+
         check = set()
         for r in results:
             x = int(math.sqrt(r))

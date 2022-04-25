@@ -23,7 +23,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     _active_children = []
     _children_lock = threading.Lock()
 
-    def __init__(self, target, *, host=None, args=None, kwargs=None, name=None, userid=None, run=None):
+    def __init__(self, target, *, host=None, args=None, kwargs=None, name=None, userid=None, run=None, _is_restart=False):
         ''' Constructor of the base :py:class:`Worker` class. Should be called by derived classes.
 
             Each worker can either be run, or assumed dead immediately up-front, in which
@@ -65,15 +65,19 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         self._userid = userid
         self._parent_host, self._parent_pid, self._parent_tid = Worker.get_current_id()
         self._host, self._pid, self._tid = Worker.get_current_id()
+        self._do_run = run
         if run:
             self._started = True
             self._dead = True # should be set to False by the derived class, after a child is actually created
             self._start()
-            if not self._dead:
+            if not self._dead and not _is_restart:
                 Worker.register_child(self)
         else:
             self._started = False
             self._result = (True, None)
+
+    def _get_restart_args(self):
+        return [self._target], { 'args': self._args, 'kwargs': self._kwargs, 'name': self._name, 'userid': self._userid, 'run': self._do_run }
 
     def __repr__(self):
         return f'{type(self).__name__}(name: {self.name!r}, userid: {self.userid}, id: {self.id}, target: {self._target})'

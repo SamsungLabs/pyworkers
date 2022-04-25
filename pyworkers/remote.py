@@ -120,6 +120,11 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         assert not self.is_child
         assert not self.is_remote_side
 
+    def _get_restart_args(self):
+        args, kwargs = super()._get_restart_args()
+        kwargs.update({ 'host': self._target_host, 'context': self._context, 'main_path': self._main_path })
+        return args, kwargs
+
     #
     # Declare type
     #
