@@ -4,7 +4,7 @@ import threading
 import contextlib
 from enum import Enum
 
-from .utils import get_hostname, classproperty, SupportClassPropertiesMeta
+from .utils import get_hostname, classproperty, gettid, SupportClassPropertiesMeta
 
 
 class WorkerType(Enum):
@@ -65,6 +65,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         self._userid = userid
         self._parent_host, self._parent_pid, self._parent_tid = Worker.get_current_id()
         self._host, self._pid, self._tid = Worker.get_current_id()
+        self._ident = threading.get_ident()
         self._do_run = run
         if run:
             self._started = True
@@ -115,7 +116,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     def get_current_id():
         ''' Return a tuple (hostname, process id, thread id) for the calling thread.
         '''
-        return (get_hostname(), os.getpid(), threading.get_ident())
+        return (get_hostname(), os.getpid(), gettid())
 
     @property
     def name(self):

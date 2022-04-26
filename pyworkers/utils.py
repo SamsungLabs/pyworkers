@@ -4,6 +4,7 @@ import queue
 import ctypes
 import logging
 import platform
+import threading
 import multiprocessing as mp
 from inspect import getfullargspec
 
@@ -294,3 +295,16 @@ def add_module_properties(module_name, properties):
 
     if replace:
         sys.modules[module_name] = lazy_type(module)
+
+
+if python_is_at_least(3, 8):
+    def gettid(thread=None):
+        if thread is not None:
+            return thread.native_id
+        return threading.get_native_id()
+else:
+    def gettid(thread=None):
+        if thread is not None:
+            return thread.ident
+        return threading.get_ident()
+

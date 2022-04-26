@@ -6,7 +6,7 @@ import logging
 import threading
 import multiprocessing as mp
 
-from .utils import foreign_raise, classproperty, Pipe, get_logger
+from .utils import foreign_raise, classproperty, Pipe, get_logger, gettid
 
 logger = get_logger(__name__)
 
@@ -131,7 +131,7 @@ class ProcessWorker(Worker):
         self._dead = False
         ready = mp.connection.wait([self._comms.parent_end, self._child.sentinel])
         if self._comms.parent_end in ready:
-            self._pid, self._tid = self._comms.parent_end.recv()
+            self._pid, self._tid, self._ident = self._comms.parent_end.recv()
             assert self._pid == self._child.pid
         else:
             assert self._child.sentinel in ready
@@ -142,7 +142,8 @@ class ProcessWorker(Worker):
         self._is_child = True
         self._child = None
         self._pid = os.getpid()
-        self._tid = threading.get_ident()
+        self._tid = gettid()
+        self._ident = threading.get_ident()
 
         self._terminate_req = False
         self._ctrl_thread_sync = threading.Event()
@@ -155,7 +156,7 @@ class ProcessWorker(Worker):
 
         try:
             #assert self.is_child
-            self._comms.child_end.put((self._pid, self._tid))
+            self._comms.child_end.put((self._pid, self._tid, self._ident))
             self._init_child()
             result = self.do_work()
             self._comms.child_end.put((True, result))
@@ -185,6 +186,6 @@ class ProcessWorker(Worker):
             return
 
         self._terminate_req = True
-        foreign_raise(self._tid, WorkerTerminatedError)
+        foreign_raise(self._ident, WorkerTerminatedError)
         self._release_self()
         self._ctrl_comms.child_end.close()

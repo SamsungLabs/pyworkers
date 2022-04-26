@@ -12,7 +12,7 @@ import collections
 import multiprocessing as mp
 
 from . import remote_pickle
-from .utils import get_hostname, foreign_raise, is_windows, get_logger, classproperty, SupportClassPropertiesMeta, Pipe
+from .utils import get_hostname, foreign_raise, is_windows, get_logger, classproperty, SupportClassPropertiesMeta, Pipe, gettid
 
 logger = get_logger(__name__)
 
@@ -381,7 +381,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._ctrl_sock.connect(control_addr)
         logger.debug('Control sockets connected: {} <==> {}', self._ctrl_sock.getsockname(), control_addr)
 
-        self._host, self._pid, self._tid = recv_msg(self._ctrl_sock, comment='ctrl: runtime info')
+        self._host, self._pid, self._tid, self._ident = recv_msg(self._ctrl_sock, comment='ctrl: runtime info')
         logger.debug('Received info package from the backend, signalling the main thread that everything is fine')
         self._startup_sync.set()
         self._fetch_results()
@@ -410,7 +410,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     # * - we are here
     def __getstate__(self, remote=False):
         if not remote and not self._remote_side:
-            return self.__dict__
+            return self.__dict__.copy()
 
         if remote:
             assert not self._remote_side
@@ -486,7 +486,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
 
             # Receiving runtime info is a signal for us that everything is ok
             runtime_info = self._comms.parent_end.recv()
-            self._host, self._pid, self._tid = runtime_info
+            self._host, self._pid, self._tid, self._ident = runtime_info
             send_msg(self._ctrl_sock, runtime_info, comment='ctrl: runtime info')
             self._comms.parent_end.send(True)
             self._comms.parent_end.close()
@@ -513,7 +513,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         logger.debug('Getting runtime info')
         self._host = get_hostname()
         self._pid = os.getpid()
-        self._tid = threading.get_ident()
+        self._tid = gettid()
+        self._ident = threading.get_ident()
 
         self._aux_socket_my, self._aux_socket_ctrl = None, None
 
@@ -558,7 +559,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             try:
                 assert self.is_child
                 logger.debug('Sending a info package to the frontend')
-                self._comms.child_end.send((self._host, self._pid, self._tid))
+                self._comms.child_end.send((self._host, self._pid, self._tid, self._ident))
                 unused_sync = self._comms.child_end.recv()
                 self._comms.child_end.close()
 
@@ -578,7 +579,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         except Exception as e:
             logger.exception('Exception occurred in the worker code')
             result = (False, e)
-            self._comms.child_end.send((self._host, self._pid, self._tid))
+            self._comms.child_end.send((self._host, self._pid, self._tid, self._ident))
             unused_sync = self._comms.child_end.recv()
             self._comms.child_end.close()
             if hasattr(self, '_ctrl_thread_loc') and self._ctrl_thread_loc.is_alive():
@@ -612,7 +613,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             if sig is not None:
                 assert sig == 'terminate'
                 logger.debug('Local terminate requested, raising an exception in the main thread...')
-                foreign_raise(self._tid, WorkerTerminatedError)
+                foreign_raise(self._ident, WorkerTerminatedError)
                 self._release_self()
             else:
                 logger.debug('Requested to finish local control thread gracefully')

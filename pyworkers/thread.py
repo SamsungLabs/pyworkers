@@ -1,11 +1,10 @@
 from .worker import Worker, WorkerType, WorkerTerminatedError
-from .utils import foreign_raise, classproperty
 
 import os
 import signal
 import threading
 
-from .utils import get_logger
+from .utils import get_logger, foreign_raise, classproperty, gettid
 
 logger = get_logger(__name__)
 
@@ -34,7 +33,7 @@ class ThreadWorker(Worker):
         assert Worker.get_current_id() == self.id or Worker.get_current_id() == self.parent_id
         if not self._started:
             return False
-        return self._tid == threading.get_ident()
+        return self._tid == gettid()
 
     def is_alive(self):
         if self.is_child:
@@ -74,7 +73,7 @@ class ThreadWorker(Worker):
         if not self.is_alive():
             return True
 
-        foreign_raise(self._tid, WorkerTerminatedError)
+        foreign_raise(self._ident, WorkerTerminatedError)
         self._release_child()
         self._child.join(timeout)
         if self._child.is_alive():
@@ -103,12 +102,14 @@ class ThreadWorker(Worker):
         self._child.start()
         self._dead = False
         self._startup_sync.wait()
-        assert self._tid == self._child.ident
+        assert self._tid == gettid(self._child)
+        assert self._ident == self._child.ident
 
     # Children-side
     def _run(self):
-        assert self._tid != threading.get_ident()
-        self._tid = threading.get_ident()
+        assert self._tid != gettid()
+        self._tid = gettid()
+        self._ident = threading.get_ident()
         self._startup_sync.set()
         try:
             assert self.is_child
