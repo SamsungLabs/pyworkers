@@ -6,7 +6,7 @@ import logging
 import threading
 import multiprocessing as mp
 
-from .utils import foreign_raise, classproperty, Pipe, get_logger, gettid
+from .utils import foreign_raise, classproperty, Pipe, get_logger, gettid, setproctitle, setthreadtitle
 
 logger = get_logger(__name__)
 
@@ -144,10 +144,12 @@ class ProcessWorker(Worker):
         self._pid = os.getpid()
         self._tid = gettid()
         self._ident = threading.get_ident()
+        if self._set_names:
+            setproctitle(self.name, self)
 
         self._terminate_req = False
         self._ctrl_thread_sync = threading.Event()
-        self._ctrl_thread = threading.Thread(target=self._ctrl_fn, name=f'{self.name} control thread', daemon=True)
+        self._ctrl_thread = threading.Thread(target=self._ctrl_fn, name=f'{self.name} (control thread)', daemon=True)
         self._ctrl_thread.start()
         self._ctrl_thread_sync.wait()
 
@@ -179,6 +181,8 @@ class ProcessWorker(Worker):
     # Children-side, control thread
     def _ctrl_fn(self):
         assert self._is_child
+        if self._set_names:
+            setthreadtitle(f'{self.name} (control thread)', self)
         self._ctrl_thread_sync.set()
         sig = self._ctrl_comms.child_end.recv()
         if sig is None:

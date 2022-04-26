@@ -308,3 +308,30 @@ else:
             return thread.ident
         return threading.get_ident()
 
+
+def typename(obj):
+    n = type(obj).__qualname__
+    p = type(obj).__module__
+    if p:
+        return f'{p}.{n}'
+    return n
+
+
+def setproctitle(title, worker=None):
+    try:
+        import setproctitle as _impl
+        worker_info = f' {typename(worker)}' if worker is not None else ''
+        _full_title = f'{sys.executable}{worker_info} {title}'
+        _impl.setproctitle(_full_title)
+    except:
+        return
+
+
+def setthreadtitle(title, worker=None):
+    try:
+        import setproctitle as _impl
+        worker_info = f' {typename(worker)}' if worker is not None else ''
+        _full_title = f'{sys.executable}{worker_info} {title}'
+        _impl.setthreadtitle(_full_title)
+    except:
+        return

@@ -12,7 +12,7 @@ import collections
 import multiprocessing as mp
 
 from . import remote_pickle
-from .utils import get_hostname, foreign_raise, is_windows, get_logger, classproperty, SupportClassPropertiesMeta, Pipe, gettid
+from .utils import get_hostname, foreign_raise, is_windows, get_logger, classproperty, SupportClassPropertiesMeta, Pipe, gettid, setproctitle, setthreadtitle
 
 logger = get_logger(__name__)
 
@@ -355,7 +355,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         logger.debug('Data socket at: {}', self._socket.getsockname())
 
         logger.debug('Spinning up a frontend thread')
-        self._child = threading.Thread(target=self._run_frontend, name=f'{self.name} remote front')
+        self._child = threading.Thread(target=self._run_frontend, name=f'{self.name} (remote front)')
         self._child.start()
         self._dead = False
         logger.debug('Waiting for the frontend thread to notify that everything is up and running...')
@@ -366,7 +366,9 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     def _run_frontend(self):
         logger.details('Frontend reached')
         assert os.getpid() == self._pid # the same process as parent
-        assert threading.get_ident() != self._tid # different thread
+        assert gettid() != self._tid # different thread
+        if self._set_names:
+            setthreadtitle(f'{self.name} (remote front)', self)
 
         logger.debug('Sending self to the server to initialize backend...')
         send_msg(self._socket, (self._context, True), comment='data: header')
@@ -480,7 +482,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._payload = None
 
             self._startup_sync = threading.Event()
-            self._ctrl_thread_rem = threading.Thread(target=self._ctrl_fn_remote, name=f'{self._name} remote control thread')
+            self._ctrl_thread_rem = threading.Thread(target=self._ctrl_fn_remote, name=f'{self._name} (remote control thread)')
             self._ctrl_thread_rem.start()
             self._startup_sync.wait()
 
@@ -515,6 +517,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         self._pid = os.getpid()
         self._tid = gettid()
         self._ident = threading.get_ident()
+        if self._set_names:
+            setproctitle(self.name, self)
 
         self._aux_socket_my, self._aux_socket_ctrl = None, None
 
@@ -529,7 +533,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
                 self._aux_socket_my, self._aux_socket_ctrl = socket.socketpair()
 
             logger.debug('Spinning up a control thread')
-            self._ctrl_thread_loc = threading.Thread(target=self._ctrl_fn_local, name=f'{self.name} local control thread')
+            self._ctrl_thread_loc = threading.Thread(target=self._ctrl_fn_local, name=f'{self.name} (local control thread)')
             self._ctrl_thread_loc.start()
 
             self._comms.parent_end.close()
@@ -608,6 +612,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     def _ctrl_fn_local(self):
         logger.details('Local control thread started')
         assert self._remote_side and self._is_backend
+        if self._set_names:
+            setthreadtitle(f'{self.name} (local control thread)', self)
         sig = self._ctrl_comms.child_end.recv()
         try:
             if sig is not None:
@@ -642,6 +648,8 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
     def _ctrl_fn_remote(self):
         logger.details('Remote control thread started')
         assert self._remote_side and not self._is_backend
+        if self._set_names:
+            setthreadtitle(f'{self.name} (remote control thread)', self)
         self._startup_sync.set()
         try:
             while True:

@@ -4,7 +4,7 @@ import os
 import signal
 import threading
 
-from .utils import get_logger, foreign_raise, classproperty, gettid
+from .utils import get_logger, foreign_raise, classproperty, gettid, setthreadtitle
 
 logger = get_logger(__name__)
 
@@ -110,6 +110,9 @@ class ThreadWorker(Worker):
         assert self._tid != gettid()
         self._tid = gettid()
         self._ident = threading.get_ident()
+        if self._set_names:
+            setthreadtitle(self.name, self)
+
         self._startup_sync.set()
         try:
             assert self.is_child

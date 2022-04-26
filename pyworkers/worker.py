@@ -23,7 +23,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     _active_children = []
     _children_lock = threading.Lock()
 
-    def __init__(self, target, *, host=None, args=None, kwargs=None, name=None, userid=None, run=None, _is_restart=False):
+    def __init__(self, target, *, host=None, args=None, kwargs=None, name=None, userid=None, run=None, set_names=True, _is_restart=False):
         ''' Constructor of the base :py:class:`Worker` class. Should be called by derived classes.
 
             Each worker can either be run, or assumed dead immediately up-front, in which
@@ -50,6 +50,9 @@ class Worker(metaclass=SupportClassPropertiesMeta):
                 name : user defined name of the worker
                 userid : user defined identifier of the worker
                 run : a flag telling whether to actually run the worker
+                set_names : whether to change process and thread names in the OS, requires "setproctitle" package (not installed by default),
+                    fails silently if the package is not installed or an error occurres while trying to set a name; see documentation of "setproctitle"
+                    for more details about how the desired effect is achieved.
         '''
         if target is not None and target is not False and not callable(target):
             raise ValueError('Target not callable')
@@ -67,6 +70,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         self._host, self._pid, self._tid = Worker.get_current_id()
         self._ident = threading.get_ident()
         self._do_run = run
+        self._set_names = set_names
         if run:
             self._started = True
             self._dead = True # should be set to False by the derived class, after a child is actually created
@@ -78,7 +82,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             self._result = (True, None)
 
     def _get_restart_args(self):
-        return [self._target], { 'args': self._args, 'kwargs': self._kwargs, 'name': self._name, 'userid': self._userid, 'run': self._do_run }
+        return [self._target], { 'args': self._args, 'kwargs': self._kwargs, 'name': self._name, 'userid': self._userid, 'run': self._do_run, 'set_names': self._set_names }
 
     def __repr__(self):
         return f'{type(self).__name__}(name: {self.name!r}, userid: {self.userid}, id: {self.id}, target: {self._target})'
