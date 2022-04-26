@@ -12,6 +12,7 @@ from pyworkers.worker import WorkerType, WorkerTerminatedError
 from pyworkers.persistent_thread import PersistentThreadWorker
 from pyworkers.persistent_process import PersistentProcessWorker
 from pyworkers.persistent_remote import PersistentRemoteWorker
+from pyworkers.utils import active_sleep
 
 
 class SuicideError(Exception):
@@ -32,7 +33,13 @@ def midlife_crisis_suicide_fn(x):
     else:
         return x**2
 
+
 def fails_for_some_x(x):
+    return 1/x
+
+
+def fails_for_some_x_heavy(x):
+    active_sleep(0.1)
     return 1/x
 
 
@@ -40,6 +47,14 @@ def fails_on_worker_0(wid, x):
     if not wid:
         raise SuicideError()
 
+    return x**2
+
+
+def fails_on_worker_0_heavy(wid, x):
+    if not wid:
+        raise SuicideError()
+
+    active_sleep(0.1)
     return x**2
 
 
@@ -375,6 +390,32 @@ class PoolTest(GenericTest):
 
         self.assertEqual(list(sorted(check)), [1, 2])
 
+    def test_retries_heavy(self):
+        p = Pool(fails_for_some_x_heavy, name='Test Pool')
+        with p:
+            for i in range(3):
+                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            results = p.run(iter(i for i in range(3)))
+
+        self.assertEqual(len(p.workers), 3)
+        for w in p.workers:
+            self.assertFalse(w.is_alive())
+            self.assertTrue(w.has_error)
+            self.assertIsInstance(w.error, ZeroDivisionError)
+
+        check = set()
+        for r in results:
+            x = int(1/r)
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), [1, 2])
+
+
     def test_retries_x2(self):
         p = Pool(fails_for_some_x, name='Test Pool')
         with p:
@@ -463,6 +504,52 @@ class PoolTest(GenericTest):
             check.add(x)
 
         self.assertEqual(list(sorted(check)), [1,2])
+
+    def test_javier(self):
+        p = Pool(fails_on_worker_0_heavy, name='Test Pool')
+        with p:
+            for i in range(3):
+                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+
+            for w in p.workers:
+                self.assertTrue(w.is_alive())
+
+            def enqueue_fn(worker, *args):
+                print(worker.userid)
+                worker.enqueue(worker.userid, *args)
+                return True
+
+            results = p.run(iter(i for i in range(3)), enqueue_fn=enqueue_fn)
+            self.assertEqual(len(p.workers), 3)
+            for idx, w in enumerate(p.workers):
+                if not idx:
+                    w.wait(0.5) # we need some time to detect that the process has died, even though we already detected it in the pool - this is because different mechanisms are used in those places: pool uses pipes (closed pipe == dead worker), is_alive checks if the process exists in the OS (pid) which seems to have higher latency
+                    self.assertFalse(w.is_alive())
+                    self.assertTrue(w.has_error)
+                    self.assertIsInstance(w.error, SuicideError)
+                else:
+                    self.assertTrue(w.is_alive())
+                    self.assertFalse(w.has_error)
+
+            results2 = p.run(iter(i for i in range(3,6)), enqueue_fn=enqueue_fn)
+            results.extend(results2)
+
+        self.assertEqual(len(p.workers), 3)
+        for idx, w in enumerate(p.workers):
+            self.assertFalse(w.is_alive())
+            if not idx:
+                self.assertTrue(w.has_error)
+                self.assertIsInstance(w.error, SuicideError)
+            else:
+                self.assertFalse(w.has_error)
+
+        check = set()
+        for r in results:
+            x = int(math.sqrt(r))
+            self.assertNotIn(x, check)
+            check.add(x)
+
+        self.assertEqual(list(sorted(check)), list(range(6)))
 
 
 for cls in [WorkerType.THREAD, WorkerType.PROCESS, WorkerType.REMOTE]:

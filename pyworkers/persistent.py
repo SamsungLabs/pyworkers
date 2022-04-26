@@ -3,6 +3,11 @@ from .worker import Worker, classproperty
 import queue
 
 
+class WorkerClosedError(RuntimeError):
+    def __init__(self, worker):
+        super().__init__(f'Trying to enqueue to a closed worker: {worker}')
+
+
 class PersistentWorker(Worker):
     def __init__(self, target, _results_pipe, **kwargs):
         if _results_pipe is None:

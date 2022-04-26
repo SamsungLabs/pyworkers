@@ -1,5 +1,5 @@
 from .process import ProcessWorker
-from .persistent import PersistentWorker
+from .persistent import PersistentWorker, WorkerClosedError
 from .utils import Pipe
 
 import copy
@@ -50,7 +50,7 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
 
     def enqueue(self, *args, **kwargs):
         if not self.is_alive() or self._closed:
-            return
+            raise WorkerClosedError()
         self._args_pipe.parent_end.send((args, kwargs))
 
     #

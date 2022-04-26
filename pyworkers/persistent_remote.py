@@ -1,5 +1,5 @@
 from .remote import RemoteWorker, recv_msg, send_msg, ConnectionClosedError
-from .persistent import PersistentWorker
+from .persistent import PersistentWorker, WorkerClosedError
 
 import copy
 import socket
@@ -55,7 +55,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
         if self.is_remote_side:
             raise RuntimeError('Enqueuing should only be done by the owner')
         if not self.is_alive() or self._closed or self._socket_closed:
-            return
+            raise WorkerClosedError()
         try:
             send_msg(self._socket, (args, kwargs), comment='data: new args')
         except ConnectionClosedError:

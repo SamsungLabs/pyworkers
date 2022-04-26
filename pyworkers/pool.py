@@ -179,12 +179,13 @@ class Pool():
             raise RuntimeError('Trying to use a closed Pool')
         if self._map_guard:
             raise RuntimeError('recursive map!')
+        if not set(self._get_all_workers_ids()).difference(self._closed): # no workers
+            return
 
         try:
             self._map_guard = True
             self._depleted = False
             self._pending = 0
-            self._closed = set()
             self._pending_per_worker = { worker.id: [] for worker in self.workers }
             self._retries = []
             ret = []
@@ -282,7 +283,7 @@ class Pool():
                             else:
                                 worker.enqueue(*inp)
                         except:
-                            time.sleep(0.3)
+                            time.sleep(0.1)
                             if not worker.is_alive():
                                 handle_death(worker, 'while enqueueing')
                                 handle_unused_data(inp, from_retries)
@@ -312,9 +313,10 @@ class Pool():
             def first_enqueue():
                 for _ in range(worker_extra_pending_inputs + 1):
                     for worker in self._workers.values():
-                        more_data = try_enqueue(worker)
-                        if not more_data:
-                            return
+                        if worker.id not in self._closed:
+                            more_data = try_enqueue(worker)
+                            if not more_data:
+                                return
 
             first_enqueue()
 
