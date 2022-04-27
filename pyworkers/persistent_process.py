@@ -3,6 +3,7 @@ from .persistent import PersistentWorker, WorkerClosedError
 from .utils import Pipe
 
 import copy
+import queue
 import multiprocessing as mp
 
 
@@ -64,8 +65,8 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
             kwargs = copy.deepcopy(self._kwargs)
             try:
                 mp.connection.wait([self._args_pipe.child_end])
-                extra = self._args_pipe.child_end.recv()
-            except EOFError:
+                extra = self._args_pipe.child_end.get()
+            except queue.Empty:
                 break
             if extra is None:
                 break

@@ -336,9 +336,6 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             return not alive
 
     def _get_result(self):
-        if not hasattr(self, '_result'):
-            return None
-
         return self._result
 
     #
@@ -404,6 +401,9 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
         except ConnectionClosedError:
             self._result = (False, None)
             logger.debug('Connection to the child has been closed before receiving the result')
+        else:
+            self._user_state = recv_msg(self._socket, comment='data: user state')
+            logger.debug('User state received')
         logger.details('Result: {}', self._result)
 
     # Handles serialization between:
@@ -594,6 +594,7 @@ class RemoteWorker(Worker, metaclass=RemoteWorkerMeta):
             self._cleanup()
             logger.debug('Sending result')
             send_msg(self._socket, result, 'data: result')
+            send_msg(self._socket, self._user_state, 'data: user state')
             logger.debug('Closing down backend-side socket')
             self._socket.shutdown(socket.SHUT_WR)
             self._socket.close()

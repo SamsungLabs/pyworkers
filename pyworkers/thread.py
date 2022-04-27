@@ -86,9 +86,6 @@ class ThreadWorker(Worker):
         return not alive
 
     def _get_result(self):
-        if not hasattr(self, '_result'):
-            return None
-
         # _result is set by the child directly
         return self._result
 

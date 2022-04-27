@@ -41,9 +41,9 @@ class GenericTest():
 
         return super().tearDown() # pylint: disable=no-member
 
-    def create_worker(self, fn, *args, run=None, **kwargs):
+    def create_worker(self, fn, *args, run=None, init_state=None, **kwargs):
         #if self.target_cls == WorkerType.REMOTE or (not isinstance(self.target_cls, WorkerType) and self.target_cls.is_remote):
-        return self.target_cls(target=fn, host=('127.0.0.1', 61006), args=args, kwargs=kwargs, run=run)
+        return self.target_cls(target=fn, host=('127.0.0.1', 61006), args=args, kwargs=kwargs, run=run, init_state=init_state)
         #else:
         #    return self.target_cls(target=fn, args=args, kwargs=kwargs, run=run)
 

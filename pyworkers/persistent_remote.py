@@ -100,6 +100,11 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
                 assert len(result) == 2
                 logger.info(f'Final result received')
                 self._result = result
+                try:
+                    self._user_state = recv_msg(self._socket, comment='data: user state')
+                    logger.debug('User state received')
+                except:
+                    pass
                 break
 
         self._results_pipe.child_end.close()

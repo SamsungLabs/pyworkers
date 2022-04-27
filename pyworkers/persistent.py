@@ -70,13 +70,12 @@ class PersistentWorker(Worker):
         self._stop = False
 
     def restart(self, *args, results_pipe=None, timeout=None, **kwargs):
-        self.close()
-        self.wait(timeout=timeout)
-        if self.is_alive():
-            self.terminate(*args, timeout=timeout, **kwargs)
+        if not self.wait(timeout=timeout):
+            self.terminate(*args, **kwargs)
             if self.is_alive():
                 raise RuntimeError(f'Could not stop a worker!')
 
+        self._get_result() # this is required to sync user state in some cases (fetch results, at least persistant process)
         ctor_args, ctor_kwargs = self._get_restart_args()
         self.__dict__.clear()
         type(self).__init__(self, *ctor_args, results_pipe=results_pipe, **ctor_kwargs, _is_restart=True)

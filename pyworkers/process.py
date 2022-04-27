@@ -102,21 +102,21 @@ class ProcessWorker(Worker):
 
     def _get_result(self):
         if self.is_alive():
-            assert not hasattr(self, '_result')
+            assert self._result is None
             return None
-        if not hasattr(self, '_result'):
+        if self._result is None:
             #assert not self._comms[0].empty()
             #self._comms.child_end.close()
-            has_result = False
             while True:
                 try:
                     self._result = self._comms.parent_end.get()
-                    has_result = True
                 except queue.Empty:
                     break
 
-            if not has_result:
+            if self._result is None:
                 self._result = (False, None)
+            else:
+                self._result, self._user_state = self._result
 
         return self._result
 
@@ -161,10 +161,10 @@ class ProcessWorker(Worker):
             self._comms.child_end.put((self._pid, self._tid, self._ident))
             self._init_child()
             result = self.do_work()
-            self._comms.child_end.put((True, result))
+            self._comms.child_end.put(((True, result), self._user_state))
         except Exception as e:
             logger.exception('Exception occurred while running the main function')
-            self._comms.child_end.put((False, e))
+            self._comms.child_end.put(((False, e), self._user_state))
         finally:
             self._cleanup()
             if self._ctrl_thread.is_alive() and not self._terminate_req:

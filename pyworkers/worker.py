@@ -23,7 +23,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
     _active_children = []
     _children_lock = threading.Lock()
 
-    def __init__(self, target, *, host=None, args=None, kwargs=None, name=None, userid=None, run=None, set_names=True, _is_restart=False):
+    def __init__(self, target, *, host=None, args=None, kwargs=None, name=None, userid=None, run=None, set_names=True, init_state=None, _is_restart=False):
         ''' Constructor of the base :py:class:`Worker` class. Should be called by derived classes.
 
             Each worker can either be run, or assumed dead immediately up-front, in which
@@ -60,6 +60,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         if run is None:
             run = bool(target)
 
+        self._result = None
         self._target = target
         self._args = args or []
         self._kwargs = kwargs or {}
@@ -71,6 +72,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         self._ident = threading.get_ident()
         self._do_run = run
         self._set_names = set_names
+        self._user_state = init_state
         if run:
             self._started = True
             self._dead = True # should be set to False by the derived class, after a child is actually created
@@ -82,7 +84,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
             self._result = (True, None)
 
     def _get_restart_args(self):
-        return [self._target], { 'args': self._args, 'kwargs': self._kwargs, 'name': self._name, 'userid': self._userid, 'run': self._do_run, 'set_names': self._set_names }
+        return [self._target], { 'args': self._args, 'kwargs': self._kwargs, 'name': self._name, 'userid': self._userid, 'run': self._do_run, 'set_names': self._set_names, 'init_state': self._user_state }
 
     def __repr__(self):
         return f'{type(self).__name__}(name: {self.name!r}, userid: {self.userid}, id: {self.id}, target: {self._target})'
@@ -234,7 +236,7 @@ class Worker(metaclass=SupportClassPropertiesMeta):
         r = self._get_result()
         if r is None:
             return None
-        
+
         graceful, result = r
         if not graceful:
             return None
@@ -271,6 +273,38 @@ class Worker(metaclass=SupportClassPropertiesMeta):
 
         graceful, _ = r
         return not graceful
+
+    @property
+    def user_state(self):
+        ''' User-defined state of the worker. The special thing about this state is that it is synchronized between
+            parent and child. The synchronization occurres at the end of the child's life - basically before the worker
+            closes down, its parent will receive the last value of this property and will update the related object
+            on its side, so its ``user_state`` has the same value as the last value observed on the child's side.
+            This state can then be obtained by the user and, for example, passed as an initial state for a different worker
+            (see ``init_state`` constructor argument).
+
+            > **Note**: Changes to the user state on the parent side are prohibited, since they will never be observed on the child's side.
+            > You should use ``init_state`` constructor argument to specify initial value of the property that will be sent to the child.
+            > After the construction of the object finishes, there is no way to update the child's copy of this property from the parent.
+
+            > **Note:** Changes to this property made on the child's side become visible on the parent side only after the child has finished,
+            > and only by the means of the last value. Especially in the case of persistant workers, if you want to notify the parent about some
+            > things changing on the worker's side while the worker is still working, you should consider using a different mechanism (e.g., wrap your
+            > workload function so that the interesting changes are returned together with its normal output).
+
+            > **Warning**: thread workers are a natural exception to the rules above as they share memory with the parent thread. Currently the
+            > implementation does not use any mechanism to separate the child's and the parent's copies and thus enforce consistent behaviour with
+            > other worker types in that aspect. Therefore, while the child is still running, user should not assume neither that the changes will be visible
+            > nor that they won't. This might change in the future, so that the behaviour is consistent at least in the case of ``user_state``,
+            > if proven beneficial.
+        '''
+        return self._user_state
+
+    @user_state.setter
+    def user_state(self, value):
+        if not self.is_child:
+            raise RuntimeError('user_state can only be modified from within the worker')
+        self._user_state = value
 
     def close(self):
         ''' Inform the worker that no more data will be send from the parent.
