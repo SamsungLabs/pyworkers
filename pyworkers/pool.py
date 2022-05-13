@@ -170,7 +170,7 @@ class Pool():
             queue = Pipe()
             w.restart(timeout=timeout, results_pipe=queue, **kwargs)
             del self._workers[oldid]
-            del self._queues[oldid]
+            self._queues.pop(oldid, None)
             self._workers[w.id] = w
             self._queues[w.id] = queue.parent_end
 
