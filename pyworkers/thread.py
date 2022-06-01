@@ -30,7 +30,7 @@ class ThreadWorker(Worker):
 
     @property
     def is_child(self):
-        assert Worker.get_current_id() == self.id or Worker.get_current_id() == self.parent_id
+        # assert Worker.get_current_id() == self.id or Worker.get_current_id() == self.parent_id
         if not self._started:
             return False
         return self._tid == gettid()

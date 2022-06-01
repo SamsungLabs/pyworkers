@@ -38,8 +38,8 @@ class ProcessWorker(Worker):
     def is_child(self):
         if self._started:
             assert bool(self._is_child) != bool(self._child)
-            assert Worker.get_current_id() == self.id or Worker.get_current_id() == self.parent_id
-            assert bool(self._is_child) == bool(Worker.get_current_id() != self.parent_id)
+            #assert Worker.get_current_id() == self.id or Worker.get_current_id() == self.parent_id
+            assert bool(self._is_child) == bool(Worker.get_current_id() == self.id)
         return self._is_child
 
     def is_alive(self):

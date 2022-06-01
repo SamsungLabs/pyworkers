@@ -1,9 +1,10 @@
 import time
+import threading
 import multiprocessing as mp
 
 from .worker import Worker, WorkerType
 from .persistent import PersistentWorker
-from .utils import get_logger, Pipe
+from .utils import foreign_raise, get_logger, Pipe
 
 logger = get_logger(__name__)
 
@@ -30,6 +31,9 @@ class Pool():
         self._retry = retry
         self._retries = []
 
+        self._workers_lock = threading.Lock()
+        self._next_worker_id = 0
+
     @property
     def timeout(self):
         return self._timeout
@@ -54,10 +58,13 @@ class Pool():
 
     def add_worker(self, worker_type, name=None, userid=None, target=None, args=None, kwargs=None, **worker_kwargs):
         worker = None
-        if name is None:
-            name = '{} worker {}'.format(self._name, len(self._workers))
-        if userid is None:
-            userid = len(self._workers)
+        with self._workers_lock:
+            if name is None:
+                name = '{} worker {}'.format(self._name, self._next_worker_id)
+            if userid is None:
+                userid = self._next_worker_id
+
+            self._next_worker_id += 1
 
         try:
             queue = Pipe()
@@ -76,14 +83,19 @@ class Pool():
             else:
                 worker = worker_type(**worker_kwargs)
 
-            if worker.id in self._workers:
-                raise ValueError(f'Duplicated worker id: {worker.id}')
+            with self._workers_lock:
+                if worker.id in self._workers:
+                    raise ValueError(f'Duplicated worker id: {worker.id}')
+                self._workers[worker.id] = worker
+                self._queues[worker.id] = queue.parent_end
 
-            self._workers[worker.id] = worker
-            self._queues[worker.id] = queue.parent_end
             self.handle_new_worker(worker)
         except:
-            if worker: # hasn't been added to the pool yet, clean it up
+            if worker:
+                with self._workers_lock:
+                    self._workers.pop(worker.id, None)
+                    self._queues.pop(worker.id, None)
+
                 worker.terminate()
             raise
 
@@ -93,12 +105,14 @@ class Pool():
         if not isinstance(worker, Worker):
             raise ValueError('Worker expected')
 
-        if worker.id in self._workers:
-            return
+        with self._workers_lock:
+            if worker.id in self._workers:
+                return
 
-        queue = worker.results_endpoint
-        self._workers[worker.id] = worker
-        self._queues[worker.id] = queue
+            queue = worker.results_endpoint
+            self._workers[worker.id] = worker
+            self._queues[worker.id] = queue
+
         self.handle_new_worker(worker)
 
     def __enter__(self):
@@ -113,6 +127,8 @@ class Pool():
     def _close(self, timeout, force, graceful):
         if self._pool_closed:
             return
+        if self._map_guard:
+            raise RuntimeError('Requested to close the Pool while still processing workload, finish a call to Pool.run before calling Pool.close or Pool.terminate')
 
         logger.info('Closing pool: {!r}{}', self._name, '' if graceful else ' due to error')
         timeout = timeout if timeout is not None else self.timeout
@@ -122,7 +138,7 @@ class Pool():
         if force is not None:
             force_args['force'] = force
 
-        for worker in self._workers.values():
+        def cleanup_worker(worker):
             try:
                 if not worker.is_alive():
                     if worker.has_error:
@@ -130,14 +146,12 @@ class Pool():
                     else:
                         logger.debug('Worker {} already closed', worker.id)
 
-                    continue
+                    return
 
                 alive = True
                 worker.close()
-                if graceful or not self._pending_per_worker.get(worker.id, None):
-                    alive = not worker.wait(timeout=timeout)
-                else:
-                    alive = not worker.wait(timeout=0.1)
+
+                alive = not worker.wait(timeout=timeout)
 
                 if alive and (force is not False or not graceful):
                     logger.info('Terminating worker {}', worker.id)
@@ -147,6 +161,22 @@ class Pool():
 
             except Exception:
                 logger.exception('Error occurred while {} {}', 'closing' if graceful else 'terminating', worker)
+
+        _cleanup_jobs = []
+        for worker in self._workers.values():
+            t = threading.Thread(target=cleanup_worker, args=(worker,))
+            t.start()
+            _cleanup_jobs.append(t)
+
+        try:
+            for t in _cleanup_jobs:
+                t.join()
+        except:
+            for t in _cleanup_jobs:
+                if t.is_alive():
+                    foreign_raise(t.ident, SystemExit)
+
+            raise
 
         for q in self._queues.values():
             q.close()
@@ -163,6 +193,8 @@ class Pool():
     def restart_workers(self, timeout=1, **kwargs):
         if self._pool_closed:
             raise RuntimeError('Trying to restart workers on a closed Pool')
+        if self._map_guard:
+            raise RuntimeError('Requested to restart workers while still processing workload, finish a call to Pool.run before calling Pool.restart_workers')
 
         to_restart = list(self._workers.items())
 
