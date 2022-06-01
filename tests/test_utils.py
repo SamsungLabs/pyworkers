@@ -20,14 +20,16 @@ class GenericTest():
         self.target_cls = target_cls
         self.worker = None
         self.server = None
+        self.server_addr = None
         super().__init__(*args, **kwargs)
 
     def setUp(self):
         if self.target_cls == WorkerType.REMOTE or (not isinstance(self.target_cls, WorkerType) and self.target_cls.is_remote):
             from pyworkers.remote_server import spawn_server
             # use slightly different port then the usual default to prevent conflicts if a normal server is already running
-            self.server = spawn_server(('127.0.0.1', 61006))
+            self.server = spawn_server(('127.0.0.1', 0))
             assert self.server.is_alive(), self.server.error
+            self.server_addr = self.server.addr
 
     def tearDown(self):
         if self.worker:
@@ -43,7 +45,7 @@ class GenericTest():
 
     def create_worker(self, fn, *args, run=None, init_state=None, **kwargs):
         #if self.target_cls == WorkerType.REMOTE or (not isinstance(self.target_cls, WorkerType) and self.target_cls.is_remote):
-        return self.target_cls(target=fn, host=('127.0.0.1', 61006), args=args, kwargs=kwargs, run=run, init_state=init_state)
+        return self.target_cls(target=fn, host=self.server_addr, args=args, kwargs=kwargs, run=run, init_state=init_state)
         #else:
         #    return self.target_cls(target=fn, args=args, kwargs=kwargs, run=run)
 

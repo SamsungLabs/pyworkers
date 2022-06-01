@@ -102,7 +102,7 @@ class PoolTest(GenericTest):
         p = Pool(test_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -126,7 +126,7 @@ class PoolTest(GenericTest):
         p = Pool(test_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -160,7 +160,7 @@ class PoolTest(GenericTest):
         p = Pool(test_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -195,7 +195,7 @@ class PoolTest(GenericTest):
         p = Pool(soft_suicide_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -214,7 +214,7 @@ class PoolTest(GenericTest):
         p = Pool(midlife_crisis_suicide_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -246,7 +246,7 @@ class PoolTest(GenericTest):
 
         p = Pool(midlife_crisis_suicide_fn, name='Test Pool')
         with p:
-            p.add_worker(worker_cls, host=('127.0.0.1', 61006), name=f'Worker_0', userid=0)
+            p.add_worker(worker_cls, host=self.server_addr, name=f'Worker_0', userid=0)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -274,7 +274,7 @@ class PoolTest(GenericTest):
         p = Pool(test_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -298,7 +298,7 @@ class PoolTest(GenericTest):
         p = Pool(test_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -324,7 +324,7 @@ class PoolTest(GenericTest):
         try:
             with p:
                 for i in range(3):
-                    p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                    p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
                 for w in p.workers:
                     self.assertTrue(w.is_alive())
@@ -345,7 +345,7 @@ class PoolTest(GenericTest):
         p = Pool(test_fn, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -369,7 +369,7 @@ class PoolTest(GenericTest):
         p = Pool(fails_for_some_x, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -394,7 +394,7 @@ class PoolTest(GenericTest):
         p = Pool(fails_for_some_x_heavy, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -420,7 +420,7 @@ class PoolTest(GenericTest):
         p = Pool(fails_for_some_x, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -445,7 +445,7 @@ class PoolTest(GenericTest):
         p = Pool(fails_on_worker_0, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -477,7 +477,7 @@ class PoolTest(GenericTest):
         p = Pool(fails_on_worker_0, name='Test Pool', retry=False)
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
@@ -509,7 +509,7 @@ class PoolTest(GenericTest):
         p = Pool(fails_on_worker_0_heavy, name='Test Pool')
         with p:
             for i in range(3):
-                p.add_worker(self.target_cls, host=('127.0.0.1', 61006), name=f'Worker_{i}', userid=i)
+                p.add_worker(self.target_cls, host=self.server_addr, name=f'Worker_{i}', userid=i)
 
             for w in p.workers:
                 self.assertTrue(w.is_alive())
