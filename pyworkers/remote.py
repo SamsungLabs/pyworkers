@@ -22,7 +22,7 @@ import struct
 import socket
 import signal
 import threading
-import collections
+import collections.abc as cabc
 import multiprocessing as mp
 
 from . import remote_pickle
@@ -93,7 +93,7 @@ def sanitize_target_host(host):
             else:
                 ret = (socket.gethostbyname(host), default_port)
         else:
-            if not isinstance(host, collections.Sequence) or len(host) != 2:
+            if not isinstance(host, cabc.Sequence) or len(host) != 2:
                 raise TypeError('Invalid type for "host" parameter: {}'.format(type(host).__name__))
             ret = (socket.gethostbyname(host[0]), host[1])
     else:
