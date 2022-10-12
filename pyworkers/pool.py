@@ -23,6 +23,12 @@ from .utils import foreign_raise, get_logger, Pipe
 logger = get_logger(__name__)
 
 
+class PoolError(RuntimeError):
+    def __init__(self, msg, partial_results=None):
+        super().__init__(msg)
+        self.partial_results = partial_results
+
+
 class Pool():
     def __init__(self, target, results_queue=None, args=None, kwargs=None, retry=True, close_timeout=5, force_terminate=None, name=None):
         if close_timeout is not None and close_timeout < 0:
@@ -404,13 +410,19 @@ class Pool():
                     else:
                         handle_new_result(worker, result)
 
-            logger.debug('All workers has finished and/or died, Pool.run is finishing...')
+            ok = (self._depleted and not self._pending and not self._retries)
+            if ok:
+                logger.debug('The whole workload has been processed, Pool.run is finishing with ok=True')
+            else:
+                logger.debug('All workers have finished and/or died but at least one input source is still available and/or pending results have not been received, Pool.run is finishing with ok=False (depleted: {}, pending: {}, len(retries): {})', self._depleted, self._pending, len(self._retries))
         finally:
             self._map_guard = False
 
+        if not ok:
+            raise PoolError('Pool failed to process the whole input - all workers have died', partial_results=(ret if return_results else None))
+
         if return_results:
             return ret
-
 
     def handle_new_worker(self, worker):
         pass

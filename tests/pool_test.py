@@ -6,7 +6,7 @@ import signal
 
 from .test_utils import GenericTest, make_test
 
-from pyworkers.pool import Pool
+from pyworkers.pool import Pool, PoolError
 from pyworkers.persistent import PersistentWorker
 from pyworkers.worker import WorkerType, WorkerTerminatedError
 from pyworkers.persistent_thread import PersistentThreadWorker
@@ -200,15 +200,19 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.is_alive())
 
-            results = p.run(iter(i for i in range(10)))
+            with self.assertRaisesRegex(PoolError, 'Pool failed to process the whole input'):
+                try:
+                    results = p.run(iter(i for i in range(10)))
+                except PoolError as e:
+                    results = e.partial_results
+                    raise
 
         self.assertEqual(len(p.workers), 3)
+        self.assertFalse(results)
         for w in p.workers:
             self.assertFalse(w.is_alive())
             self.assertTrue(w.has_error)
             self.assertIs(type(w.error), SuicideError)
-
-        self.assertEqual(len(results), 0)
 
     def test_midlife_crisis_suicide(self):
         p = Pool(midlife_crisis_suicide_fn, name='Test Pool')
@@ -219,7 +223,12 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.is_alive())
 
-            results = p.run(iter(i for i in range(10)))
+            with self.assertRaisesRegex(PoolError, 'Pool failed to process the whole input'):
+                try:
+                    results = p.run(iter(i for i in range(10)))
+                except PoolError as e:
+                    results = e.partial_results
+                    raise
 
         self.assertEqual(len(p.workers), 3)
         for w in p.workers:
@@ -282,9 +291,15 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.terminate())
 
-            unused_results = p.run(iter(i for i in range(10)))
+            with self.assertRaisesRegex(PoolError, 'Pool failed to process the whole input'):
+                try:
+                    results = p.run(iter(i for i in range(10)))
+                except PoolError as e:
+                    results = e.partial_results
+                    raise
 
         self.assertEqual(len(p.workers), 3)
+        self.assertFalse(results)
         for w in p.workers:
             self.assertFalse(w.is_alive())
             self.assertTrue(w.has_error)
@@ -309,7 +324,12 @@ class PoolTest(GenericTest):
                 # does not have opportunity to react to termination request
                 os.kill(w.pid, signal.SIGTERM)
 
-            results = p.run(iter(i for i in range(10)))
+            with self.assertRaisesRegex(PoolError, 'Pool failed to process the whole input'):
+                try:
+                    results = p.run(iter(i for i in range(10)))
+                except PoolError as e:
+                    results = e.partial_results
+                    raise
 
         self.assertEqual(len(p.workers), 3)
         self.assertFalse(results)
@@ -374,7 +394,12 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.is_alive())
 
-            results = p.run(iter(i for i in range(3)))
+            with self.assertRaisesRegex(PoolError, 'Pool failed to process the whole input'):
+                try:
+                    results = p.run(iter(i for i in range(3)))
+                except PoolError as e:
+                    results = e.partial_results
+                    raise
 
         self.assertEqual(len(p.workers), 3)
         for w in p.workers:
@@ -399,7 +424,12 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.is_alive())
 
-            results = p.run(iter(i for i in range(3)))
+            with self.assertRaisesRegex(PoolError, 'Pool failed to process the whole input'):
+                try:
+                    results = p.run(iter(i for i in range(3)))
+                except PoolError as e:
+                    results = e.partial_results
+                    raise
 
         self.assertEqual(len(p.workers), 3)
         for w in p.workers:
@@ -425,7 +455,12 @@ class PoolTest(GenericTest):
             for w in p.workers:
                 self.assertTrue(w.is_alive())
 
-            results = p.run(iter(i for i in range(6)), worker_extra_pending_inputs=1)
+            with self.assertRaisesRegex(PoolError, 'Pool failed to process the whole input'):
+                try:
+                    results = p.run(iter(i for i in range(6)), worker_extra_pending_inputs=1)
+                except PoolError as e:
+                    results = e.partial_results
+                    raise
 
         self.assertEqual(len(p.workers), 3)
         for w in p.workers:
