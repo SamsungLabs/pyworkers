@@ -5,3 +5,4 @@ docs/build/
 docs/source/pyworkers*
 dist/
 build/
+.eggs
