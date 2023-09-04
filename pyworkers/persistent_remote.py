@@ -69,7 +69,7 @@ class PersistentRemoteWorker(PersistentWorker, RemoteWorker):
         if self.is_remote_side:
             raise RuntimeError('Enqueuing should only be done by the owner')
         if not self.is_alive() or self._closed or self._socket_closed:
-            raise WorkerClosedError()
+            raise WorkerClosedError(self)
         try:
             send_msg(self._socket, (args, kwargs), comment='data: new args')
         except ConnectionClosedError:

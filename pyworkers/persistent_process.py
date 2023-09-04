@@ -65,7 +65,7 @@ class PersistentProcessWorker(PersistentWorker, ProcessWorker):
 
     def enqueue(self, *args, **kwargs):
         if not self.is_alive() or self._closed:
-            raise WorkerClosedError()
+            raise WorkerClosedError(self)
         self._args_pipe.parent_end.send((args, kwargs))
 
     #

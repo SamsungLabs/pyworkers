@@ -406,7 +406,8 @@ class Pool():
                     assert wid in self._workers
                     worker = self._workers.get(wid, None)
                     if not flag:
-                        handle_death(worker)
+                        if worker.id not in self._closed: # if a worker died while enqueueing, its death has already been handled but we will (possibly) end up here
+                            handle_death(worker)
                     else:
                         handle_new_result(worker, result)
 
