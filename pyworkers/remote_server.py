@@ -248,7 +248,7 @@ for p in ${{pythons[@]}}; do
     if [ -z "$p" ]; then
         continue
     fi
-    if command -v "$p" 2>/dev/null; then
+    if command -v "$p" >/dev/null 2>/dev/null; then
         python="$p"
         break
     fi
