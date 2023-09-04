@@ -228,7 +228,7 @@ def run_server(addr, install_handlers=True, close_on_none=True):
         server.run()
 
 
-def _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_children):
+def _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_children, preferred_python):
     full_host = host
     if user:
         full_user = user
@@ -238,19 +238,36 @@ def _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_c
         full_host = '{}@{}'.format(full_user, host)
 
     host = socket.gethostbyname(host)
-    if not command:
-        server_cmd = 'python3 -m pyworkers.remote_server'
-    else:
-        server_cmd = command
 
-    server_cmd += ' --close_on_none -vv --addr {}'.format(host)
+    if not command:
+        command = '-m pyworkers.remote_server'
+
+    server_cmd = '''python=""
+pythons=({})
+for p in ${{pythons[@]}}; do
+    if [ -z "$p" ]; then
+        continue
+    fi
+    if command -v "$p" 2>/dev/null; then
+        python="$p"
+        break
+    fi
+done
+
+if [ "$python" == "" ]; then
+    echo "Could not find suitable python interpreter, options: ${{pythons[@]}}"
+    exit 2
+fi
+
+$python {} --close_on_none -vv --addr {}'''.format(' '.join(f'"{p}"' for p in preferred_python), command, host)
+
     if suppress_children:
         server_cmd += ' --suppress_children'
     if server_port:
         server_cmd += ' --port {}'.format(server_port)
 
     if wdir:
-        server_cmd = 'cd {} || exit 1; echo "OK"; {}'.format(wdir, server_cmd)
+        server_cmd = 'cd {} || { "Could move to a requested working directory: {}"; exit 1; }; echo "OK"; {}'.format(wdir, wdir, server_cmd)
 
     return subprocess.Popen(['ssh', '-tt', full_host, server_cmd],
         stdout=subprocess.PIPE,
@@ -262,7 +279,7 @@ _server_running_re = re.compile(r'Listening on \(.*\)')
 
 
 @contextlib.contextmanager
-def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, command=None, suppress_children=True):
+def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, command=None, suppress_children=True, preferred_python=None):
     ''' Returns a context manager which returns a remote server on the specified host
         by ssh-ing into it. The server is killed when the calling threads exists the manager.
 
@@ -282,6 +299,9 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
                 the server will be spawned from the default directory to which the user is moved when ssh-ing
             server_port : optional port number on which the server should be listening
             command : optionally specifies what command to run, instead of calling pyworkers.remote_server directly
+            preferred_python : optionally specifies a list of preferred python interpreters to use, in order ot preference;
+                if not provided, ``python3`` will be used, if provided and none of the interpreters can be found, a ``FileNotFound``
+                will be raised.
 
         Returns:
             A context manager which creates a server on enter and closes it on exit.
@@ -291,10 +311,13 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
         Raises:
             ValueError : if ``passwd`` is provided without ``user``
             RuntimeError : if the server could not be spawned
+            FileNotFoundError : if none of the provided ``preferred_python`` interpreters can be found
     '''
 
     if passwd and not user:
         raise ValueError('Password without username')
+    if not preferred_python:
+        preferred_python = ['python3']
 
     class ssh_popen():
         def __init__(self, proc, stdout_buff=None):
@@ -363,7 +386,7 @@ def tmp_ssh_server(host, user=None, passwd=None, wdir=None, server_port=None, co
                 foreign_raise(self._fetcher.ident, RuntimeError)
 
     _stdout_buff = bytearray()
-    ssh_proc = _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_children)
+    ssh_proc = _spawn_ssh_server(host, user, passwd, wdir, server_port, command, suppress_children, preferred_python)
     ssh_proc = ssh_popen(ssh_proc, _stdout_buff)
 
     try:
